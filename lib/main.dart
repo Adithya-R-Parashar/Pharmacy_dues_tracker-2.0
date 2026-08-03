@@ -206,7 +206,7 @@ class _AppShellState extends State<AppShell> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: SafeArea(
+      body: IndexedStack(
         child: IndexedStack(
           index: appState.currentTab,
           children: _views,
