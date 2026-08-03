@@ -1,10 +1,12 @@
 // ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../data/database_helper.dart';
 import '../services/excel_import_service.dart';
 import '../services/excel_test_generator.dart';
 import '../providers/app_state.dart';
+import '../theme.dart';
 
 class ImportView extends StatefulWidget {
   const ImportView({super.key});
@@ -15,6 +17,7 @@ class ImportView extends StatefulWidget {
 
 class _ImportViewState extends State<ImportView> {
   bool _isProcessing = false;
+  String _progressMessage = '';
 
   void _showResultDialog(ImportResult result) {
     showDialog(
@@ -32,12 +35,10 @@ class _ImportViewState extends State<ImportView> {
                 children: [
                   _buildStatRow('New Pharmacies Created', result.newPharmacies),
                   _buildStatRow('Existing Pharmacies Matched', result.matchedPharmacies),
+                  _buildStatRow('Snapshots Updated', result.snapshotsUpdated),
                   const Divider(),
-                  _buildStatRow('New Invoices Added', result.newInvoices),
-                  _buildStatRow('Invoices Updated', result.updatedInvoices),
-                  _buildStatRow('Skipped Paid Invoices', result.skippedPaidInvoices),
                   _buildStatRow('Invalid/Skipped Rows', result.skippedInvalidRows),
-                  
+
                   if (result.skippedReasons.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     const Text(
@@ -73,7 +74,7 @@ class _ImportViewState extends State<ImportView> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
+              child: const Text('Close', maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ],
         );
@@ -102,8 +103,6 @@ class _ImportViewState extends State<ImportView> {
     );
   }
 
-  String _progressMessage = '';
-
   Future<void> _pickAndImport() async {
     setState(() {
       _isProcessing = true;
@@ -119,7 +118,6 @@ class _ImportViewState extends State<ImportView> {
         },
       );
       if (result != null) {
-        // Trigger page updates
         if (mounted) {
           Provider.of<AppState>(context, listen: false).refresh();
           _showResultDialog(result);
@@ -141,7 +139,7 @@ class _ImportViewState extends State<ImportView> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
+                child: const Text('OK', maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
@@ -166,11 +164,7 @@ class _ImportViewState extends State<ImportView> {
       final dbHelper = DatabaseHelper.instance;
       final db = await dbHelper.database;
 
-      // ----------------------------------------------------
-      // TEST 1: Grouped-format Excel import verification
-      // ----------------------------------------------------
       await db.delete('reminders');
-      await db.delete('invoices');
       await db.delete('pharmacies');
 
       final groupedBytes = ExcelTestGenerator.generateGroupedExcelBytes();
@@ -184,49 +178,32 @@ class _ImportViewState extends State<ImportView> {
       );
 
       final pharmacies = await db.query('pharmacies');
-      final invoices = await db.query('invoices');
 
       double sunshineDues = 0.0;
       double greenLeafDues = 0.0;
 
       for (final ph in pharmacies) {
         final code = ph['party_code'];
-        final id = ph['id'] as int;
-        final duesList = await db.query(
-          'invoices',
-          columns: ['due_amount'],
-          where: 'pharmacy_id = ? AND status = ?',
-          whereArgs: [id, 'open'],
-        );
-        double sum = 0.0;
-        for (final row in duesList) {
-          sum += (row['due_amount'] as num).toDouble();
-        }
-        if (code == 'SUN-101') sunshineDues = sum;
-        if (code == 'GRN-202') greenLeafDues = sum;
+        final total = (ph['total_amount'] as num?)?.toDouble() ?? 0.0;
+        if (code == 'SUN-101') sunshineDues = total;
+        if (code == 'GRN-202') greenLeafDues = total;
       }
 
       final groupedPass = pharmacies.length == 2 &&
-          invoices.length == 5 &&
           groupedResult.skippedInvalidRows == 0 &&
           sunshineDues == 9200.0 &&
           greenLeafDues == 3500.0;
 
       print('==================================================');
-      print('TEST 1: Grouped-Format Excel Import');
+      print('TEST 1: Grouped/Aging-Format Excel Import');
       print('  Pharmacies Imported: ${pharmacies.length} (Expected: 2)');
-      print('  Invoices Imported: ${invoices.length} (Expected: 5)');
       print('  Skipped Invalid Rows: ${groupedResult.skippedInvalidRows} (Expected: 0)');
       print('  Sunshine Pharmacy Dues: ₹$sunshineDues (Expected: 9200.0)');
       print('  Green Leaf Dues: ₹$greenLeafDues (Expected: 3500.0)');
       print('  STATUS: ${groupedPass ? "PASS" : "FAIL"}');
       print('==================================================');
 
-      // ----------------------------------------------------
-      // TEST 2: Regression Flat-format Excel import verification
-      // ----------------------------------------------------
       await db.delete('reminders');
-      await db.delete('invoices');
       await db.delete('pharmacies');
 
       final flatBytes = ExcelTestGenerator.generateTestExcelBytes();
@@ -240,30 +217,25 @@ class _ImportViewState extends State<ImportView> {
       );
 
       final pharmaciesFlat = await db.query('pharmacies');
-      final invoicesFlat = await db.query('invoices');
 
       final flatPass = pharmaciesFlat.length == 2 &&
-          invoicesFlat.length == 3 &&
           flatResult.skippedInvalidRows == 2;
 
       print('==================================================');
       print('TEST 2: Regression Flat-Format Excel Import');
       print('  Pharmacies Imported: ${pharmaciesFlat.length} (Expected: 2)');
-      print('  Invoices Imported: ${invoicesFlat.length} (Expected: 3)');
       print('  Skipped Invalid Rows: ${flatResult.skippedInvalidRows} (Expected: 2)');
       print('  STATUS: ${flatPass ? "PASS" : "FAIL"}');
       print('==================================================');
 
-      // Restore grouped data to the DB so the user has visual test data in the app
       await db.delete('reminders');
-      await db.delete('invoices');
       await db.delete('pharmacies');
       final finalResult = await ExcelImportService().importExcelFromBytes(groupedBytes);
 
       if (mounted) {
         Provider.of<AppState>(context, listen: false).refresh();
         _showResultDialog(finalResult);
-        
+
         final allPass = groupedPass && flatPass;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -293,90 +265,131 @@ class _ImportViewState extends State<ImportView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Import Data'),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.upload_file_rounded,
-                      size: 64,
-                      color: theme.colorScheme.primary,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF00695C),
+          elevation: 1,
+          shadowColor: Colors.black12,
+          title: const Text('Import Data'),
+        ),
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: AppTheme.appBackground,
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Card(
+                    elevation: 4,
+                    color: Colors.white.withValues(alpha: 0.95),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Excel Import',
-                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Upload your pharmacy dues Excel sheet (.xlsx) to update local pharmacy and invoice balances.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    if (_isProcessing) ...[
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 16),
-                      Text(
-                        _progressMessage,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700],
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ] else ...[
-                      ElevatedButton.icon(
-                        onPressed: _pickAndImport,
-                        icon: const Icon(Icons.file_open),
-                        label: const Text('Import Excel from Device'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.upload_file_rounded,
+                            size: 64,
+                            color: Color(0xFF00695C),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _runProgrammaticTestImport,
-                        icon: const Icon(Icons.bug_report),
-                        label: const Text('Run In-Memory Test Import'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Excel Import',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF004D40),
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Upload your pharmacy dues Excel sheet (.xlsx) to update local pharmacy and aging bucket balances.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
+                          ),
+                          const SizedBox(height: 24),
+
+                          if (_isProcessing) ...[
+                            const CircularProgressIndicator(color: Color(0xFF00695C)),
+                            const SizedBox(height: 16),
+                            Text(
+                              _progressMessage,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF004D40),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ] else ...[
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: _pickAndImport,
+                                  icon: const Icon(Icons.file_open),
+                                  label: const Text(
+                                    'Import Excel from Device',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF00695C),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _runProgrammaticTestImport,
+                                  icon: const Icon(Icons.bug_report),
+                                  label: const Text(
+                                    'Run In-Memory Test Import',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF00695C),
+                                    side: const BorderSide(color: Color(0xFF00695C)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
         ),
       ),
     ),
   );
-  }
+}
 }

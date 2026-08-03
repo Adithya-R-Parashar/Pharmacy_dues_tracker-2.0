@@ -7,18 +7,14 @@ import '../data/city_alias_repository.dart';
 class ImportResult {
   final int newPharmacies;
   final int matchedPharmacies;
-  final int newInvoices;
-  final int updatedInvoices;
-  final int skippedPaidInvoices;
+  final int snapshotsUpdated;
   final int skippedInvalidRows;
   final List<String> skippedReasons;
 
   ImportResult({
     required this.newPharmacies,
     required this.matchedPharmacies,
-    required this.newInvoices,
-    required this.updatedInvoices,
-    required this.skippedPaidInvoices,
+    required this.snapshotsUpdated,
     required this.skippedInvalidRows,
     required this.skippedReasons,
   });
@@ -28,9 +24,7 @@ class ImportResult {
     return 'ImportResult(\n'
         '  newPharmacies: $newPharmacies,\n'
         '  matchedPharmacies: $matchedPharmacies,\n'
-        '  newInvoices: $newInvoices,\n'
-        '  updatedInvoices: $updatedInvoices,\n'
-        '  skippedPaidInvoices: $skippedPaidInvoices,\n'
+        '  snapshotsUpdated: $snapshotsUpdated,\n'
         '  skippedInvalidRows: $skippedInvalidRows,\n'
         '  skippedReasons:\n'
         '    ${skippedReasons.isEmpty ? "None" : skippedReasons.join("\n    ")}\n'
@@ -39,7 +33,6 @@ class ImportResult {
 }
 
 class ExcelImportService {
-
   /// Converts an Excel CellValue to String representation.
   static String? cellValueToString(excel.CellValue? cellValue) {
     if (cellValue == null) return null;
@@ -63,83 +56,6 @@ class ExcelImportService {
   /// Formats a DateTime as yyyy-MM-dd.
   static String formatDateOnly(DateTime dt) {
     return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-  }
-
-  /// Parses an Excel CellValue into a yyyy-MM-dd Date string.
-  static String parseDate(excel.CellValue? cellValue) {
-    if (cellValue == null) throw const FormatException('Date cell is empty');
-
-    if (cellValue is excel.DateCellValue) {
-      return '${cellValue.year.toString().padLeft(4, '0')}-${cellValue.month.toString().padLeft(2, '0')}-${cellValue.day.toString().padLeft(2, '0')}';
-    }
-    if (cellValue is excel.DateTimeCellValue) {
-      return '${cellValue.year.toString().padLeft(4, '0')}-${cellValue.month.toString().padLeft(2, '0')}-${cellValue.day.toString().padLeft(2, '0')}';
-    }
-
-    // Handle number fallback (Excel serial numbers)
-    if (cellValue is excel.IntCellValue) {
-      final serial = cellValue.value;
-      final parsedDt = DateTime(1899, 12, 30).add(Duration(days: serial));
-      return formatDateOnly(parsedDt);
-    }
-    if (cellValue is excel.DoubleCellValue) {
-      final serial = cellValue.value.toInt();
-      final parsedDt = DateTime(1899, 12, 30).add(Duration(days: serial));
-      return formatDateOnly(parsedDt);
-    }
-
-    // Handle string format conversion
-    final stringVal = cellValueToString(cellValue)?.trim();
-    if (stringVal == null || stringVal.isEmpty) {
-      throw const FormatException('Date cell is empty');
-    }
-
-    // Check yyyy-MM-dd
-    final regYmd = RegExp(r'^(\d{4})[./-](\d{1,2})[./-](\d{1,2})$');
-    final matchYmd = regYmd.firstMatch(stringVal);
-    if (matchYmd != null) {
-      final year = int.parse(matchYmd.group(1)!);
-      final month = int.parse(matchYmd.group(2)!);
-      final day = int.parse(matchYmd.group(3)!);
-      return formatDateOnly(DateTime(year, month, day));
-    }
-
-    // Check dd-MM-yyyy or dd/MM/yyyy
-    final regDmy = RegExp(r'^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$');
-    final matchDmy = regDmy.firstMatch(stringVal);
-    if (matchDmy != null) {
-      final day = int.parse(matchDmy.group(1)!);
-      final month = int.parse(matchDmy.group(2)!);
-      final year = int.parse(matchDmy.group(3)!);
-      return formatDateOnly(DateTime(year, month, day));
-    }
-
-    // Check dd-MMM-yy or dd-MMM-yyyy (e.g. 04-Jul-26)
-    final regDmmmy = RegExp(r'^(\d{1,2})[./-]([a-zA-Z]{3})[./-](\d{2,4})$');
-    final matchDmmmy = regDmmmy.firstMatch(stringVal);
-    if (matchDmmmy != null) {
-      final day = int.parse(matchDmmmy.group(1)!);
-      final monthStr = matchDmmmy.group(2)!.toLowerCase();
-      final yearStr = matchDmmmy.group(3)!;
-      final year = yearStr.length == 2 ? 2000 + int.parse(yearStr) : int.parse(yearStr);
-
-      const monthsMap = {
-        'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-        'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
-      };
-      final month = monthsMap[monthStr];
-      if (month != null) {
-        return formatDateOnly(DateTime(year, month, day));
-      }
-    }
-
-    // Direct DateTime tryParse check
-    final parsedDt = DateTime.tryParse(stringVal);
-    if (parsedDt != null) {
-      return formatDateOnly(parsedDt);
-    }
-
-    throw FormatException('Invalid date format: $stringVal');
   }
 
   /// Parses an Excel CellValue into a double.
@@ -183,7 +99,6 @@ class ExcelImportService {
 
   /// Decodes and parses Excel bytes, performing database updates and returning results.
   Future<ImportResult> importExcelFromBytes(Uint8List bytes, {Function(int processed, int total)? onProgress}) async {
-    // 1. Perform Excel decoding & parsing in a background isolate (CPU bound)
     final parseResults = await compute(parseExcelIsolate, bytes);
 
     final parsedRows = parseResults['parsedRows'] as List<dynamic>;
@@ -192,9 +107,7 @@ class ExcelImportService {
 
     int newPharmacies = 0;
     int matchedPharmacies = 0;
-    int newInvoices = 0;
-    int updatedInvoices = 0;
-    int skippedPaidInvoices = 0;
+    int snapshotsUpdated = 0;
 
     final db = await DatabaseHelper.instance.database;
 
@@ -203,7 +116,8 @@ class ExcelImportService {
       for (final alias in aliasesList) alias.rawValue.toLowerCase(): alias.canonicalCity
     };
 
-    // 2. Perform all database writes inside a single atomic SQL transaction (I/O bound)
+    final todayDateStr = formatDateOnly(DateTime.now());
+
     await db.transaction((txn) async {
       final total = parsedRows.length;
       for (int i = 0; i < total; i++) {
@@ -214,13 +128,11 @@ class ExcelImportService {
         final salesman = row['salesman'] as String?;
         final city = row['city'] as String?;
         final resolvedCity = city != null ? (aliasMap[city.trim().toLowerCase()] ?? city.trim()) : null;
-        final transactionNumber = row['transactionNumber'] as String;
-        final invoiceDate = row['invoiceDate'] as String?;
-        final amount = row['amount'] as double;
-        final dueAmount = row['dueAmount'] as double;
-        final dueDate = row['dueDate'] as String;
+        final totalAmount = row['totalAmount'] as double;
+        final bucket121180 = row['bucket121180'] as double?;
+        final bucket181270 = row['bucket181270'] as double?;
+        final bucket271360 = row['bucket271360'] as double?;
 
-        // Pharmacy upsert
         final existingPharmacyMap = await txn.query(
           'pharmacies',
           where: 'party_code = ?',
@@ -230,71 +142,43 @@ class ExcelImportService {
         final now = DateTime.now();
         final nowStr = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
 
-        int pharmacyId;
         if (isNewPharmacy) {
-          pharmacyId = await txn.insert('pharmacies', {
+          await txn.insert('pharmacies', {
             'party_code': partyCode,
             'name': partyName,
             'salesman': salesman,
             'city': resolvedCity,
+            'total_amount': totalAmount,
+            'bucket_121_180': bucket121180,
+            'bucket_181_270': bucket181270,
+            'bucket_271_360': bucket271360,
+            'last_import_date': todayDateStr,
+            'notes': null,
             'created_at': nowStr,
           });
           newPharmacies++;
         } else {
-          pharmacyId = existingPharmacyMap.first['id'] as int;
+          final pharmacyId = existingPharmacyMap.first['id'] as int;
           await txn.update(
             'pharmacies',
             {
               'name': partyName,
-              'salesman': salesman, // Always overwrite
-              'city': resolvedCity, // Always overwrite
+              'salesman': salesman,
+              'city': resolvedCity,
+              'total_amount': totalAmount,
+              'bucket_121_180': bucket121180,
+              'bucket_181_270': bucket181270,
+              'bucket_271_360': bucket271360,
+              'last_import_date': todayDateStr,
+              // NEVER update notes or created_at
             },
             where: 'id = ?',
             whereArgs: [pharmacyId],
           );
           matchedPharmacies++;
+          snapshotsUpdated++;
         }
 
-        // Invoice upsert
-        final existingInvoiceMaps = await txn.query(
-          'invoices',
-          where: 'pharmacy_id = ? AND invoice_number = ?',
-          whereArgs: [pharmacyId, transactionNumber],
-        );
-
-        if (existingInvoiceMaps.isNotEmpty) {
-          final status = existingInvoiceMaps.first['status'] as String;
-          if (status == 'paid') {
-            skippedPaidInvoices++;
-          } else {
-            final invoiceId = existingInvoiceMaps.first['id'] as int;
-            await txn.update(
-              'invoices',
-              {
-                'amount': amount,
-                'due_amount': dueAmount,
-                'due_date': dueDate,
-              },
-              where: 'id = ?',
-              whereArgs: [invoiceId],
-            );
-            updatedInvoices++;
-          }
-        } else {
-          await txn.insert('invoices', {
-            'pharmacy_id': pharmacyId,
-            'invoice_number': transactionNumber,
-            'invoice_date': invoiceDate,
-            'amount': amount,
-            'due_amount': dueAmount,
-            'due_date': dueDate,
-            'status': 'open',
-            'created_at': nowStr,
-          });
-          newInvoices++;
-        }
-
-        // Trigger progress callback if present
         if (onProgress != null) {
           onProgress(i + 1, total);
         }
@@ -304,9 +188,7 @@ class ExcelImportService {
     return ImportResult(
       newPharmacies: newPharmacies,
       matchedPharmacies: matchedPharmacies,
-      newInvoices: newInvoices,
-      updatedInvoices: updatedInvoices,
-      skippedPaidInvoices: skippedPaidInvoices,
+      snapshotsUpdated: snapshotsUpdated,
       skippedInvalidRows: skippedInvalidRows,
       skippedReasons: skippedReasons,
     );
@@ -329,51 +211,42 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
   int? partyNameIdx;
   int? salesmanIdx;
   int? cityIdx;
-  int? transactionNumberIdx;
-  int? dateIdx;
-  int? amountIdx;
-  int? dueAmountIdx;
-  int? dueDateIdx;
+  int? totalAmountIdx;
+  int? bucket121180Idx;
+  int? bucket181270Idx;
+  int? bucket271360Idx;
 
-  // 1. Flexible Column Header matching using clean keyword matching rules
   final headerRow = sheet.rows.first;
   for (int i = 0; i < headerRow.length; i++) {
     final cellVal = ExcelImportService.cellValueToString(headerRow[i]?.value)?.trim();
     if (cellVal == null) continue;
 
-    // clean space and punctuation for flexible containing check
-    final clean = cellVal.replaceAll(RegExp(r'[\s_\-\.\,\/\(\)\:]'), '').toLowerCase();
+    final lower = cellVal.toLowerCase();
+    final clean = lower.replaceAll(RegExp(r'[\s_\-\.\,\/\(\)\:]'), '');
 
-    if (clean.contains('code')) {
+    if (clean.contains('code') && partyCodeIdx == null) {
       partyCodeIdx = i;
-    } else if (clean.contains('salesman')) {
+    } else if (clean.contains('salesman') && salesmanIdx == null) {
       salesmanIdx = i;
-    } else if (clean.contains('city') || clean.contains('area')) {
+    } else if ((clean.contains('city') || clean.contains('area')) && cityIdx == null) {
       cityIdx = i;
-    } else if (clean.contains('party') && !clean.contains('code')) {
+    } else if (clean.contains('121') && clean.contains('180') && bucket121180Idx == null) {
+      bucket121180Idx = i;
+    } else if (clean.contains('181') && clean.contains('270') && bucket181270Idx == null) {
+      bucket181270Idx = i;
+    } else if (clean.contains('271') && clean.contains('360') && bucket271360Idx == null) {
+      bucket271360Idx = i;
+    } else if ((clean.contains('amount') || lower == 'total') && totalAmountIdx == null) {
+      totalAmountIdx = i;
+    } else if (clean.contains('party') && partyNameIdx == null) {
       partyNameIdx = i;
-    } else if (clean.contains('trn') || (clean.contains('transaction') && (clean.contains('number') || clean.contains('no')))) {
-      transactionNumberIdx = i;
-    } else if (clean.contains('due') && clean.contains('amount')) {
-      dueAmountIdx = i;
-    } else if (clean.contains('amount') && !clean.contains('due')) {
-      amountIdx = i;
-    } else if (clean.contains('due') && clean.contains('date')) {
-      dueDateIdx = i;
-    } else if (clean.contains('date') && !clean.contains('due')) {
-      dateIdx = i;
     }
   }
 
-  if (partyCodeIdx == null ||
-      partyNameIdx == null ||
-      transactionNumberIdx == null ||
-      dateIdx == null ||
-      amountIdx == null ||
-      dueAmountIdx == null) {
+  if (partyCodeIdx == null || partyNameIdx == null || totalAmountIdx == null) {
     throw Exception(
       'Missing required columns in Excel sheet.\n'
-      'Required: Party Code, Party Name, Transaction Number, Date, Amount, Due Amount.',
+      'Required: Party Code, Party Name, Total Amount.',
     );
   }
 
@@ -381,26 +254,23 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
   int skippedInvalidRows = 0;
   final skippedReasons = <String>[];
 
-  // Tracking references for forward-filling
   String? lastPartyCode;
   String? lastPartyName;
   String? lastSalesman;
   String? lastCity;
 
-  // 2. Process data rows
   for (int r = 1; r < sheet.rows.length; r++) {
     final row = sheet.rows[r];
 
-    // Check if row is completely blank (all mapped values are blank/null)
     bool isRowBlank = true;
     final mappedIndices = [
       partyCodeIdx,
       partyNameIdx,
-      transactionNumberIdx,
-      dateIdx,
-      amountIdx,
-      dueAmountIdx,
-      dueDateIdx,
+      totalAmountIdx,
+      bucket121180Idx,
+      bucket181270Idx,
+      bucket271360Idx,
+      salesmanIdx,
       cityIdx,
     ];
     for (final idx in mappedIndices) {
@@ -413,10 +283,9 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       }
     }
     if (isRowBlank) {
-      continue; // Silently skip completely blank rows
+      continue;
     }
 
-    // Skip TOTAL/subtotal rows entirely
     bool isTotalRow = false;
     for (final cell in row) {
       final val = ExcelImportService.cellValueToString(cell?.value);
@@ -426,25 +295,23 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       }
     }
     if (isTotalRow) {
-      continue; // Silently skip subtotal summaries without logging
+      continue;
     }
 
     final partyCodeVal = partyCodeIdx < row.length ? row[partyCodeIdx]?.value : null;
     final partyNameVal = partyNameIdx < row.length ? row[partyNameIdx]?.value : null;
     final salesmanVal = (salesmanIdx != null && salesmanIdx < row.length) ? row[salesmanIdx]?.value : null;
     final cityVal = (cityIdx != null && cityIdx < row.length) ? row[cityIdx]?.value : null;
-    final transactionNumberVal = transactionNumberIdx < row.length ? row[transactionNumberIdx]?.value : null;
-    final dateVal = dateIdx < row.length ? row[dateIdx]?.value : null;
-    final amountVal = amountIdx < row.length ? row[amountIdx]?.value : null;
-    final dueAmountVal = dueAmountIdx < row.length ? row[dueAmountIdx]?.value : null;
+    final totalAmountVal = totalAmountIdx < row.length ? row[totalAmountIdx]?.value : null;
+    final bucket121180Val = (bucket121180Idx != null && bucket181270Idx != null && bucket121180Idx < row.length) ? row[bucket121180Idx]?.value : null;
+    final bucket181270Val = (bucket181270Idx != null && bucket181270Idx < row.length) ? row[bucket181270Idx]?.value : null;
+    final bucket271360Val = (bucket271360Idx != null && bucket271360Idx < row.length) ? row[bucket271360Idx]?.value : null;
 
     final rawPartyCode = ExcelImportService.cellValueToString(partyCodeVal)?.trim();
     final rawPartyName = ExcelImportService.cellValueToString(partyNameVal)?.trim();
     final rawSalesman = ExcelImportService.cellValueToString(salesmanVal)?.trim();
     final rawCity = ExcelImportService.cellValueToString(cityVal)?.trim();
-    final transactionNumber = ExcelImportService.cellValueToString(transactionNumberVal)?.trim();
 
-    // Track last non-blank pharmacy details
     if (rawPartyCode != null && rawPartyCode.isNotEmpty) {
       lastPartyCode = rawPartyCode;
     }
@@ -458,7 +325,6 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       lastCity = rawCity;
     }
 
-    // Forward-fill blank party_code/name/salesman/city if valid transaction number is present
     final partyCode = (rawPartyCode == null || rawPartyCode.isEmpty) ? lastPartyCode : rawPartyCode;
     final partyName = (rawPartyName == null || rawPartyName.isEmpty) ? lastPartyName : rawPartyName;
     final salesman = (rawSalesman == null || rawSalesman.isEmpty) ? lastSalesman : rawSalesman;
@@ -474,71 +340,35 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       skippedReasons.add('Row ${r + 1}: missing Party name');
       continue;
     }
-    if (transactionNumber == null || transactionNumber.isEmpty) {
-      skippedInvalidRows++;
-      skippedReasons.add('Row ${r + 1}: missing Transaction number');
-      continue;
-    }
 
-    // Try to parse due date
-    String? parsedDueDate;
-    bool hasParsedDueDate = false;
-    if (dueDateIdx != null && dueDateIdx < row.length) {
-      final valStr = ExcelImportService.cellValueToString(row[dueDateIdx]?.value)?.trim();
-      if (valStr != null && valStr.isNotEmpty) {
-        try {
-          parsedDueDate = ExcelImportService.parseDate(row[dueDateIdx]?.value);
-          hasParsedDueDate = true;
-        } catch (_) {
-          // Fallback to invoice date
-        }
-      }
-    }
-
-    // Try to parse invoice date
-    String? parsedInvoiceDate;
-    bool hasParsedInvoiceDate = false;
-    if (dateVal != null) {
-      final str = ExcelImportService.cellValueToString(dateVal)?.trim();
-      if (str != null && str.isNotEmpty) {
-        try {
-          parsedInvoiceDate = ExcelImportService.parseDate(dateVal);
-          hasParsedInvoiceDate = true;
-        } catch (_) {
-          // If we also couldn't parse due date, this might be a skip
-        }
-      }
-    }
-
-    // Combine date validations
-    if (!hasParsedDueDate) {
-      if (hasParsedInvoiceDate && parsedInvoiceDate != null) {
-        final invDateObj = DateTime.parse(parsedInvoiceDate);
-        final computedDue = invDateObj.add(const Duration(days: 60));
-        parsedDueDate = ExcelImportService.formatDateOnly(computedDue);
-      } else {
-        skippedInvalidRows++;
-        skippedReasons.add('Row ${r + 1}: missing both date and due date, cannot determine due date');
-        continue;
-      }
-    }
-
-    // Amount & due amount
-    final double parsedAmount;
-    final double parsedDueAmount;
+    final double parsedTotalAmount;
     try {
-      parsedAmount = ExcelImportService.parseDouble(amountVal);
+      parsedTotalAmount = ExcelImportService.parseDouble(totalAmountVal);
     } catch (_) {
       skippedInvalidRows++;
-      skippedReasons.add('Row ${r + 1}: missing or invalid amount value');
+      skippedReasons.add('Row ${r + 1}: missing or invalid total amount value');
       continue;
     }
-    try {
-      parsedDueAmount = ExcelImportService.parseDouble(dueAmountVal);
-    } catch (_) {
-      skippedInvalidRows++;
-      skippedReasons.add('Row ${r + 1}: missing or invalid due amount value');
-      continue;
+
+    double? parsedBucket121180;
+    if (bucket121180Val != null) {
+      try {
+        parsedBucket121180 = ExcelImportService.parseDouble(bucket121180Val);
+      } catch (_) {}
+    }
+
+    double? parsedBucket181270;
+    if (bucket181270Val != null) {
+      try {
+        parsedBucket181270 = ExcelImportService.parseDouble(bucket181270Val);
+      } catch (_) {}
+    }
+
+    double? parsedBucket271360;
+    if (bucket271360Val != null) {
+      try {
+        parsedBucket271360 = ExcelImportService.parseDouble(bucket271360Val);
+      } catch (_) {}
     }
 
     parsedRows.add({
@@ -546,11 +376,10 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       'partyName': partyName,
       'salesman': salesman,
       'city': city,
-      'transactionNumber': transactionNumber,
-      'invoiceDate': parsedInvoiceDate,
-      'amount': parsedAmount,
-      'dueAmount': parsedDueAmount,
-      'dueDate': parsedDueDate,
+      'totalAmount': parsedTotalAmount,
+      'bucket121180': parsedBucket121180,
+      'bucket181270': parsedBucket181270,
+      'bucket271360': parsedBucket271360,
       'rowIndex': r + 1,
     });
   }

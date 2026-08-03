@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/database_helper.dart';
 import '../providers/app_state.dart';
+import '../theme.dart';
 import 'manage_cities_screen.dart';
 import '../services/notification_service.dart';
 
@@ -40,7 +41,7 @@ class _SettingsViewState extends State<SettingsView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'This action is highly destructive and will permanently delete all pharmacies, invoices, and call logs from this device.',
+                    'This action is highly destructive and will permanently delete all pharmacies and call logs from this device.',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
@@ -83,11 +84,9 @@ class _SettingsViewState extends State<SettingsView> {
     if (confirmed == true && mounted) {
       await NotificationService().cancelAllNotifications();
       final db = await DatabaseHelper.instance.database;
-      
-      // Perform database wipe
+
       await db.transaction((txn) async {
         await txn.delete('reminders');
-        await txn.delete('invoices');
         await txn.delete('pharmacies');
       });
 
@@ -108,87 +107,120 @@ class _SettingsViewState extends State<SettingsView> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF00695C),
+        elevation: 1,
+        shadowColor: Colors.black12,
         title: const Text('Settings'),
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16.0),
-        children: [
-          // App Info Header Card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.settings_applications,
-                    size: 64,
-                    color: theme.colorScheme.primary,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: AppTheme.appBackground,
+        ),
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
+              Card(
+                color: Colors.white.withValues(alpha: 0.95),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.teal[200]!, width: 1),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.settings_applications,
+                        size: 64,
+                        color: Color(0xFF00695C),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Pharmacy Dues Tracker',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF004D40),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Version 1.0.0',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Pharmacy Dues Tracker',
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              Text(
+                'General Settings',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF004D40),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              Card(
+                color: Colors.white.withValues(alpha: 0.95),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.teal[200]!, width: 1),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.location_city, color: Color(0xFF00695C)),
+                  title: const Text(
+                    'Manage Cities',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Version 1.0.0',
-                    style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[650]),
+                  subtitle: const Text('Merge spelling variants and manage city aliases', style: TextStyle(color: Color(0xFF00695C))),
+                  trailing: const Icon(Icons.chevron_right, color: Color(0xFF004D40)),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ManageCitiesScreen()),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              Text(
+                'Maintenance Actions',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF004D40),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              Card(
+                color: Colors.white.withValues(alpha: 0.95),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.red[200]!, width: 1),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text(
+                    'Clear All Local Data',
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                   ),
-                ],
+                  subtitle: const Text('Delete all local pharmacies and call records'),
+                  trailing: const Icon(Icons.chevron_right, color: Colors.red),
+                  onTap: _clearAllData,
+                ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 24),
-
-          Text(
-            'General Settings',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.location_city, color: Colors.blue),
-              title: const Text(
-                'Manage Cities',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text('Merge spelling variants and manage city aliases'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ManageCitiesScreen()),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // Actions List
-          Text(
-            'Maintenance Actions',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-
-          Card(
-            color: theme.colorScheme.errorContainer.withValues(alpha: 0.1),
-            child: ListTile(
-              leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text(
-                'Clear All Local Data',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-              ),
-              subtitle: const Text('Delete all local pharmacies, invoices, and call records'),
-              trailing: const Icon(Icons.chevron_right, color: Colors.red),
-              onTap: _clearAllData,
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
   }
 }

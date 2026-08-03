@@ -5,31 +5,20 @@ This document defines the SQLite database schema for the Pharmacy Dues Tracker.
 ## Tables
 
 ### `pharmacies`
-Stores information about each pharmacy.
+Stores information and aging bucket dues about each pharmacy.
 ```sql
 CREATE TABLE pharmacies (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  party_code TEXT UNIQUE,      -- from Excel, used as the matching key on re-upload, not shown in UI
+  party_code TEXT UNIQUE,
   name TEXT,
-  salesman TEXT,               -- salesman representative, nullable
-  city TEXT,                   -- city/area of the pharmacy, nullable
-  created_at TEXT
-);
-```
-
-### `invoices`
-Stores outstanding and paid invoice details linked to pharmacies.
-```sql
-CREATE TABLE invoices (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  pharmacy_id INTEGER REFERENCES pharmacies(id),
-  invoice_number TEXT,
-  invoice_date TEXT,
-  amount REAL,                 -- original invoice amount
-  due_amount REAL,             -- outstanding balance, drives all "total due" calculations
-  due_date TEXT,               -- days-overdue/until-due always computed live from this, never stored
-  status TEXT CHECK(status IN ('open', 'paid')),
-  paid_date TEXT,
+  salesman TEXT,
+  city TEXT,
+  total_amount REAL,         -- total outstanding; overwritten on every import
+  bucket_121_180 REAL,       -- nullable; overwritten on every import
+  bucket_181_270 REAL,       -- nullable; overwritten on every import
+  bucket_271_360 REAL,       -- nullable; overwritten on every import
+  last_import_date TEXT,     -- yyyy-MM-dd; updated on every import
+  notes TEXT,                -- NEVER touched by import — user-managed only, persists forever
   created_at TEXT
 );
 ```
@@ -39,12 +28,12 @@ Stores the scheduled call reminders for pharmacies.
 ```sql
 CREATE TABLE reminders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  pharmacy_id INTEGER REFERENCES pharmacies(id), -- nullable, set only when reminder_type = 'pharmacy'
+  pharmacy_id INTEGER,
   reminder_type TEXT CHECK(reminder_type IN ('pharmacy','salesman')),
-  salesman_name TEXT,                            -- nullable, set only when reminder_type = 'salesman'
+  salesman_name TEXT,
   scheduled_date TEXT,
-  scheduled_time TEXT,                           -- format HH:mm, nullable
-  status TEXT CHECK(status IN ('pending', 'done', 'rescheduled')),
+  scheduled_time TEXT,
+  status TEXT CHECK(status IN ('pending','done','rescheduled')),
   notification_id INTEGER,
   notes TEXT,
   created_at TEXT
@@ -63,6 +52,6 @@ CREATE TABLE city_aliases (
 
 ## Design Notes
 
+- **Aging-Bucket Model**: Pharmacy outstanding balance and aging buckets (`bucket_121_180`, `bucket_181_270`, `bucket_271_360`) are stored directly on the `pharmacies` table and overwritten on every import along with `last_import_date`.
+- **Notes are User-Managed**: The `notes` field on `pharmacies` is never touched by import operations and persists forever until edited by the user.
 - **Reminders are Append-Only**: Rescheduling a call creates a new row in the `reminders` table rather than editing the old one, to preserve the complete call history.
-- **Permanent Invoices**: Paid invoices are flagged with `status = 'paid'` and are kept permanently in the database. There is no automatic deletion or purging of any data.
-- **Computed Overdue/Until-Due**: Calculations such as days-overdue or days-until-due are always computed live from the `due_date` field in Dart and are never stored statically in the database.

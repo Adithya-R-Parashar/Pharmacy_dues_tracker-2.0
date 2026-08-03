@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../data/pharmacy_repository.dart';
 import '../data/city_alias_repository.dart';
 import '../providers/app_state.dart';
+import '../theme.dart';
 
 class ManageCitiesScreen extends StatefulWidget {
   const ManageCitiesScreen({super.key});
@@ -99,7 +100,7 @@ class _ManageCitiesScreenState extends State<ManageCitiesScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(selected),
-                  child: const Text('Merge'),
+                  child: const Text('Merge & Save'),
                 ),
               ],
             );
@@ -108,51 +109,52 @@ class _ManageCitiesScreenState extends State<ManageCitiesScreen> {
       },
     );
 
-    if (canonical != null) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = true;
-      });
-      try {
-        await _aliasRepo.mergeCities(list, canonical);
-        if (!mounted) return;
+    if (canonical != null && canonical.isNotEmpty && mounted) {
+      await _aliasRepo.mergeCities(list, canonical);
+
+      if (mounted) {
         Provider.of<AppState>(context, listen: false).refresh();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Merged city names into "$canonical".')),
-        );
         await _loadData();
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Merge failed: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Merged ${list.length} cities into "$canonical"'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     }
   }
 
   Future<void> _undoAlias(CityAlias alias) async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Alias Rule'),
+          content: Text('Remove alias "${alias.rawValue} → ${alias.canonicalCity}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm == true && mounted) {
       await _aliasRepo.removeAlias(alias.rawValue);
-      if (!mounted) return;
-      Provider.of<AppState>(context, listen: false).refresh();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Deleted alias rule for "${alias.rawValue}".')),
-      );
-      await _loadData();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Undo failed: $e')),
-      );
+      if (mounted) {
+        Provider.of<AppState>(context, listen: false).refresh();
+        await _loadData();
+      }
     }
   }
 
@@ -162,136 +164,170 @@ class _ManageCitiesScreenState extends State<ManageCitiesScreen> {
     final canMerge = _selectedCities.length >= 2;
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF00695C),
+        elevation: 1,
+        shadowColor: Colors.black12,
         title: const Text('Manage Cities'),
       ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Checklist section
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: AppTheme.appBackground,
+        ),
+        child: SafeArea(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF00695C)))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Select Cities to Merge',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF004D40),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            onPressed: canMerge ? _mergeSelected : null,
+                            icon: const Icon(Icons.call_merge, size: 18),
+                            label: Text('Merge (${_selectedCities.length})'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00695C),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        'Active City Spellings',
+                        'Select two or more city spelling variations to merge into a single canonical city name.',
+                        style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFF00695C)),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _distinctCities.isEmpty
+                          ? Card(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Center(
+                                  child: Text(
+                                    'No cities found in local database.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Card(
+                              margin: EdgeInsets.zero,
+                              color: Colors.white.withValues(alpha: 0.95),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.teal[200]!, width: 1),
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _distinctCities.length,
+                                separatorBuilder: (context, index) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final city = _distinctCities[index];
+                                  final isChecked = _selectedCities.contains(city);
+
+                                  return CheckboxListTile(
+                                    title: Text(city, style: const TextStyle(color: Color(0xFF004D40), fontWeight: FontWeight.bold)),
+                                    value: isChecked,
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        if (val == true) {
+                                          _selectedCities.add(city);
+                                        } else {
+                                          _selectedCities.remove(city);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+
+                      const SizedBox(height: 32),
+
+                      Text(
+                        'Active Normalization Rules',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: const Color(0xFF004D40),
                         ),
                       ),
-                      ElevatedButton.icon(
-                        onPressed: canMerge ? _mergeSelected : null,
-                        icon: const Icon(Icons.merge_type, size: 16),
-                        label: const Text('Merge Selected'),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Spelling variations automatically resolved and standardized on future imports.',
+                        style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFF00695C)),
                       ),
+                      const SizedBox(height: 12),
+
+                      _aliases.isEmpty
+                          ? Card(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Center(
+                                  child: Text(
+                                    'No alias rules configured yet.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Card(
+                              margin: EdgeInsets.zero,
+                              color: Colors.white.withValues(alpha: 0.95),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.teal[200]!, width: 1),
+                              ),
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _aliases.length,
+                                separatorBuilder: (context, index) => const Divider(height: 1),
+                                itemBuilder: (context, index) {
+                                  final alias = _aliases[index];
+                                  return ListTile(
+                                    leading: const Icon(Icons.compare_arrows, color: Color(0xFF00695C)),
+                                    title: Text(
+                                      '${alias.rawValue} → ${alias.canonicalCity}',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
+                                    ),
+                                    subtitle: Text('Created: ${alias.createdAt.split("T").first}', style: const TextStyle(color: Color(0xFF00695C))),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () => _undoAlias(alias),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+
+                      const SizedBox(height: 80),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Select 2 or more cities to merge spelling variations and map them to a canonical name.',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[650]),
-                  ),
-                  const SizedBox(height: 12),
-
-                  _distinctCities.isEmpty
-                      ? Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Center(
-                              child: Text(
-                                'No cities found in local database.',
-                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                              ),
-                            ),
-                          ),
-                        )
-                      : Card(
-                          margin: EdgeInsets.zero,
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _distinctCities.length,
-                            separatorBuilder: (context, index) => const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final city = _distinctCities[index];
-                              final isChecked = _selectedCities.contains(city);
-
-                              return CheckboxListTile(
-                                title: Text(city),
-                                value: isChecked,
-                                controlAffinity: ListTileControlAffinity.leading,
-                                onChanged: (val) {
-                                  setState(() {
-                                    if (val == true) {
-                                      _selectedCities.add(city);
-                                    } else {
-                                      _selectedCities.remove(city);
-                                    }
-                                  });
-                                },
-                              );
-                            },
-                          ),
-                        ),
-
-                  const SizedBox(height: 32),
-
-                  // Aliases section
-                  Text(
-                    'Active Normalization Rules',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Spelling variations automatically resolved and standardized on future imports.',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[650]),
-                  ),
-                  const SizedBox(height: 12),
-
-                  _aliases.isEmpty
-                      ? Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Center(
-                              child: Text(
-                                'No alias rules configured yet.',
-                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                              ),
-                            ),
-                          ),
-                        )
-                      : Card(
-                          margin: EdgeInsets.zero,
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _aliases.length,
-                            separatorBuilder: (context, index) => const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final alias = _aliases[index];
-                              return ListTile(
-                                leading: const Icon(Icons.compare_arrows, color: Colors.blue),
-                                title: Text('${alias.rawValue} → ${alias.canonicalCity}'),
-                                subtitle: Text('Created: ${alias.createdAt.split("T").first}'),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  onPressed: () => _undoAlias(alias),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-
-                  const SizedBox(height: 80),
-                ],
-              ),
-            ),
+                ),
+        ),
       ),
     );
   }

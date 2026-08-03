@@ -19,9 +19,8 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
-      onUpgrade: _upgradeDB,
     );
   }
 
@@ -33,21 +32,12 @@ class DatabaseHelper {
         name TEXT,
         salesman TEXT,
         city TEXT,
-        created_at TEXT
-      );
-    ''');
-
-    await db.execute('''
-      CREATE TABLE invoices (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        pharmacy_id INTEGER REFERENCES pharmacies(id),
-        invoice_number TEXT,
-        invoice_date TEXT,
-        amount REAL,
-        due_amount REAL,
-        due_date TEXT,
-        status TEXT CHECK(status IN ('open','paid')),
-        paid_date TEXT,
+        total_amount REAL,
+        bucket_121_180 REAL,
+        bucket_181_270 REAL,
+        bucket_271_360 REAL,
+        last_import_date TEXT,
+        notes TEXT,
         created_at TEXT
       );
     ''');
@@ -55,7 +45,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE reminders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        pharmacy_id INTEGER REFERENCES pharmacies(id),
+        pharmacy_id INTEGER,
         reminder_type TEXT CHECK(reminder_type IN ('pharmacy','salesman')),
         salesman_name TEXT,
         scheduled_date TEXT,
@@ -74,49 +64,6 @@ class DatabaseHelper {
         created_at TEXT
       );
     ''');
-  }
-
-  Future<void> _safeAlterTable(Database db, String query) async {
-    try {
-      await db.execute(query);
-    } catch (e) {
-      final msg = e.toString().toLowerCase();
-      if (msg.contains('duplicate column name') || msg.contains('already exists') || msg.contains('duplicate')) {
-        // Silently ignore
-      } else {
-        rethrow;
-      }
-    }
-  }
-
-  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await _safeAlterTable(db, 'ALTER TABLE reminders ADD COLUMN scheduled_time TEXT;');
-    }
-    if (oldVersion < 3) {
-      await _safeAlterTable(db, 'ALTER TABLE pharmacies ADD COLUMN salesman TEXT;');
-    }
-    if (oldVersion < 4) {
-      await _safeAlterTable(db, "ALTER TABLE reminders ADD COLUMN reminder_type TEXT CHECK(reminder_type IN ('pharmacy','salesman'));");
-      await _safeAlterTable(db, "ALTER TABLE reminders ADD COLUMN salesman_name TEXT;");
-      try {
-        await db.execute("UPDATE reminders SET reminder_type = 'pharmacy';");
-      } catch (_) {}
-    }
-    if (oldVersion < 5) {
-      await _safeAlterTable(db, 'ALTER TABLE pharmacies ADD COLUMN city TEXT;');
-    }
-    if (oldVersion < 6) {
-      try {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS city_aliases (
-            raw_value TEXT PRIMARY KEY COLLATE NOCASE,
-            canonical_city TEXT,
-            created_at TEXT
-          );
-        ''');
-      } catch (_) {}
-    }
   }
 
   Future<void> close() async {

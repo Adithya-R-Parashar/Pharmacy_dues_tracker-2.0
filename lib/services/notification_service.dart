@@ -7,7 +7,6 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/pharmacy_repository.dart';
 import '../data/reminder_repository.dart';
-import '../data/invoice_repository.dart';
 import 'formatters.dart';
 import '../screens/pharmacy_detail_screen.dart';
 import '../screens/salesman_detail_screen.dart';
@@ -25,7 +24,6 @@ class NotificationService {
 
   Future<void> initialize() async {
     print('--- NotificationService.initialize() called ---');
-    // 1. Initialize timezone
     tz.initializeTimeZones();
     try {
       final String timeZoneName = await FlutterTimezone.getLocalTimezone();
@@ -38,7 +36,6 @@ class NotificationService {
       } catch (_) {}
     }
 
-    // 2. Initialize android settings
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -46,7 +43,6 @@ class NotificationService {
       android: initializationSettingsAndroid,
     );
 
-    // 3. Set up notification responses/tap handlers
     await _notificationsPlugin.initialize(
       settings: initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -56,7 +52,6 @@ class NotificationService {
       },
     );
 
-    // 4. Set up the Android notification channel
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -73,7 +68,6 @@ class NotificationService {
 
       await androidImplementation.createNotificationChannel(channel);
 
-      // Check and request exact alarm permission if needed
       final canSchedule = await androidImplementation.canScheduleExactNotifications() ?? false;
       print('--- NotificationService.initialize --- canScheduleExactNotifications: $canSchedule');
       if (!canSchedule) {
@@ -82,7 +76,6 @@ class NotificationService {
       }
     }
 
-    // 5. Check if launched from notification (cold start)
     final NotificationAppLaunchDetails? launchDetails =
         await _notificationsPlugin.getNotificationAppLaunchDetails();
     if (launchDetails != null &&
@@ -155,15 +148,12 @@ class NotificationService {
         return;
       }
 
-      final totalDue = await InvoiceRepository().getTotalDueForPharmacy(pharmacyId);
-      final openInvoices = await InvoiceRepository().getOpenByPharmacy(pharmacyId);
-
       title = 'Call ${pharmacy.name}';
-      body = '${formatIndianCurrency(totalDue)} outstanding — ${openInvoices.length} open invoices';
+      body = '${formatIndianCurrency(pharmacy.totalAmount ?? 0.0)} outstanding';
     } else if (reminder.reminderType == 'salesman') {
       final salesmanName = reminder.salesmanName!;
       final summaries = await PharmacyRepository().getSalesmenSummary();
-      
+
       SalesmanSummary? foundSummary;
       for (final s in summaries) {
         if (s.salesman.trim().toLowerCase() == salesmanName.trim().toLowerCase()) {
@@ -178,6 +168,10 @@ class NotificationService {
     } else {
       print('--- scheduleReminderNotification ERROR: unknown reminderType: ${reminder.reminderType} ---');
       return;
+    }
+
+    if (reminder.notes != null && reminder.notes!.trim().isNotEmpty) {
+      body += '\nNote: ${reminder.notes!.trim()}';
     }
 
     final dateParts = reminder.scheduledDate.split('-');

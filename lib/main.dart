@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'theme.dart';
 import 'providers/app_state.dart';
@@ -15,6 +16,21 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // REQUIRED on Android 14+ before ANY status bar color changes work
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // Now set the status bar style
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent, // transparent, not white — let the app content show through
+      statusBarIconBrightness: Brightness.dark, // dark icons (visible on light backgrounds)
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   await NotificationService().initialize();
   runApp(
     ChangeNotifierProvider(
@@ -189,44 +205,49 @@ class _AppShellState extends State<AppShell> {
     final appState = Provider.of<AppState>(context);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: IndexedStack(
           index: appState.currentTab,
           children: _views,
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: appState.currentTab,
-        onTap: appState.setTab,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.upload_file_outlined),
-            activeIcon: Icon(Icons.upload_file),
-            label: 'Import',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.phone_in_talk_outlined),
-            activeIcon: Icon(Icons.phone_in_talk),
-            label: 'Calls',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.badge_outlined),
-            activeIcon: Icon(Icons.badge),
-            label: 'Salesmen',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
-      ),
-    );
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: appState.currentTab,
+          onTap: appState.setTab,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF00695C),
+          unselectedItemColor: const Color(0xFF607D8B),
+          elevation: 8,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.upload_file_outlined),
+              activeIcon: Icon(Icons.upload_file),
+              label: 'Import',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.phone_in_talk_outlined),
+              activeIcon: Icon(Icons.phone_in_talk),
+              label: 'Calls',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.badge_outlined),
+              activeIcon: Icon(Icons.badge),
+              label: 'Salesmen',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined),
+              activeIcon: Icon(Icons.settings),
+              label: 'Settings',
+            ),
+          ],
+        ),
+      );
   }
 }

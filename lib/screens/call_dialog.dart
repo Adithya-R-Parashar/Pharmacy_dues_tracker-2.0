@@ -11,7 +11,7 @@ import '../services/notification_service.dart';
 class LogRescheduleCallDialog extends StatefulWidget {
   final Pharmacy? pharmacy;
   final String? salesmanName;
-  final Reminder? reminder; // Optional existing pending reminder
+  final Reminder? reminder;
 
   const LogRescheduleCallDialog({
     super.key,
@@ -28,7 +28,7 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
   final PharmacyRepository _pharmacyRepo = PharmacyRepository();
   final ReminderRepository _reminderRepo = ReminderRepository();
 
-  String _targetType = 'pharmacy'; // 'pharmacy' or 'salesman'
+  String _targetType = 'pharmacy';
   Pharmacy? _selectedPharmacy;
   String? _selectedSalesmanName;
 
@@ -52,6 +52,7 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
 
     if (widget.reminder != null) {
       _targetType = widget.reminder!.reminderType;
+      _notesController.text = widget.reminder!.notes ?? '';
       if (_targetType == 'pharmacy') {
         _selectedSalesmanName = null;
         if (_selectedPharmacy == null) {
@@ -193,7 +194,7 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
         scheduledDate: _formatDate(_selectedDate!),
         scheduledTime: _selectedTime != null ? _formatTime(_selectedTime!) : null,
         status: 'pending',
-        notes: null,
+        notes: notes.isNotEmpty ? notes : null,
         createdAt: nowStr,
       );
       final newId = await _reminderRepo.create(newReminder);
@@ -235,7 +236,8 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
+    return Container(
+      color: Colors.white,
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
@@ -262,7 +264,10 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                   _isSearching
                       ? (_targetType == 'pharmacy' ? 'Select Pharmacy' : 'Select Salesman')
                       : 'Log / Reschedule Call',
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF004D40),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
@@ -272,8 +277,9 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                       children: [
                         Expanded(
                           child: ChoiceChip(
-                            label: const Center(child: Text('Pharmacy')),
+                            label: const Center(child: Text('Pharmacy', maxLines: 1, overflow: TextOverflow.ellipsis)),
                             selected: _targetType == 'pharmacy',
+                            selectedColor: const Color(0xFFB2DFDB),
                             onSelected: (selected) {
                               if (selected) {
                                 setState(() {
@@ -287,8 +293,9 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: ChoiceChip(
-                            label: const Center(child: Text('Salesman')),
+                            label: const Center(child: Text('Salesman', maxLines: 1, overflow: TextOverflow.ellipsis)),
                             selected: _targetType == 'salesman',
+                            selectedColor: const Color(0xFFB2DFDB),
                             onSelected: (selected) {
                               if (selected) {
                                 setState(() {
@@ -308,8 +315,10 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                     TextField(
                       decoration: const InputDecoration(
                         labelText: 'Search Pharmacy by Name',
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: Icon(Icons.search, color: Color(0xFF00695C)),
                         border: OutlineInputBorder(),
+                        fillColor: Color(0xFFF5F5F5),
+                        filled: true,
                       ),
                       onChanged: _performSearch,
                     ),
@@ -320,22 +329,35 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                           ? Center(
                               child: Text(
                                 _searchQuery.isEmpty ? 'Type to search pharmacies' : 'No pharmacies found',
-                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                               ),
                             )
                           : ListView.builder(
                               itemCount: _searchResults.length,
                               itemBuilder: (context, index) {
                                 final ph = _searchResults[index];
-                                return ListTile(
-                                  title: Text(ph.name),
-                                  subtitle: Text('Code: ${ph.partyCode}'),
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedPharmacy = ph;
-                                      _isSearching = false;
-                                    });
-                                  },
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5F5F5),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: ListTile(
+                                    title: Text(
+                                      ph.name,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
+                                    ),
+                                    subtitle: Text(
+                                      'Code: ${ph.partyCode}',
+                                      style: const TextStyle(color: Color(0xFF00695C)),
+                                    ),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedPharmacy = ph;
+                                        _isSearching = false;
+                                      });
+                                    },
+                                  ),
                                 );
                               },
                             ),
@@ -344,8 +366,10 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                     TextField(
                       decoration: const InputDecoration(
                         labelText: 'Search Salesman by Name',
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: Icon(Icons.search, color: Color(0xFF00695C)),
                         border: OutlineInputBorder(),
+                        fillColor: Color(0xFFF5F5F5),
+                        filled: true,
                       ),
                       onChanged: _performSalesmanSearch,
                     ),
@@ -356,161 +380,198 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                           ? Center(
                               child: Text(
                                 _salesmanSearchQuery.isEmpty ? 'Type to search salesmen' : 'No salesmen found',
-                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                               ),
                             )
                           : ListView.builder(
                               itemCount: _salesmanSearchResults.length,
                               itemBuilder: (context, index) {
                                 final name = _salesmanSearchResults[index];
-                                return ListTile(
-                                  leading: const Icon(Icons.person),
-                                  title: Text(name),
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedSalesmanName = name;
-                                      _isSearching = false;
-                                    });
-                                  },
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF5F5F5),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: ListTile(
+                                    leading: const Icon(Icons.person, color: Color(0xFF00695C)),
+                                    title: Text(
+                                      name,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
+                                    ),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectedSalesmanName = name;
+                                        _isSearching = false;
+                                      });
+                                    },
+                                  ),
                                 );
                               },
                             ),
                     ),
                   ],
                   const SizedBox(height: 16),
-                  Row(
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancel'),
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF00695C),
+                          side: const BorderSide(color: Color(0xFF00695C)),
                         ),
+                        child: const Text('Cancel', maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
                 ] else ...[
-                  Card(
-                    margin: EdgeInsets.zero,
-                    elevation: 0,
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                  Container(
+                    padding: const EdgeInsets.all(12.0),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: _targetType == 'pharmacy' && _selectedPharmacy == null
-                          ? const Center(child: CircularProgressIndicator())
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _targetType == 'pharmacy'
-                                            ? _selectedPharmacy!.name
-                                            : _selectedSalesmanName!,
-                                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                                        overflow: TextOverflow.ellipsis,
+                    child: _targetType == 'pharmacy' && _selectedPharmacy == null
+                        ? const Center(child: CircularProgressIndicator(color: Color(0xFF00695C)))
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _targetType == 'pharmacy'
+                                          ? _selectedPharmacy!.name
+                                          : _selectedSalesmanName!,
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: const Color(0xFF004D40),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _targetType == 'pharmacy'
-                                            ? 'Pharmacy (Code: ${_selectedPharmacy!.partyCode})'
-                                            : 'Sales Representative',
-                                        style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                                      ),
-                                    ],
-                                  ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _targetType == 'pharmacy'
+                                          ? 'Pharmacy (Code: ${_selectedPharmacy!.partyCode})'
+                                          : 'Sales Representative',
+                                      style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFF00695C)),
+                                    ),
+                                  ],
                                 ),
-                                if (widget.pharmacy == null && widget.salesmanName == null && widget.reminder == null)
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _isSearching = true;
-                                        _searchResults = [];
-                                        _searchQuery = '';
-                                        _salesmanSearchResults = [];
-                                        _salesmanSearchQuery = '';
-                                      });
-                                    },
-                                    child: const Text('Change'),
-                                  ),
-                              ],
-                            ),
-                    ),
+                              ),
+                              if (widget.pharmacy == null && widget.salesmanName == null && widget.reminder == null)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isSearching = true;
+                                      _searchResults = [];
+                                      _searchQuery = '';
+                                      _salesmanSearchResults = [];
+                                      _salesmanSearchQuery = '';
+                                    });
+                                  },
+                                  child: const Text('Change', style: TextStyle(color: Color(0xFF00695C))),
+                                ),
+                            ],
+                          ),
                   ),
                   const SizedBox(height: 16),
 
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Next Call Date (Optional)'),
-                    subtitle: Text(
-                      _selectedDate == null ? 'Not scheduled (Log call as completed)' : _formatDate(_selectedDate!),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_selectedDate != null)
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              setState(() {
-                                _selectedDate = null;
-                                _selectedTime = null;
-                              });
-                            },
-                          ),
-                        const Icon(Icons.calendar_today),
-                      ],
+                    child: ListTile(
+                      title: const Text('Next Call Date (Optional)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+                      subtitle: Text(
+                        _selectedDate == null ? 'Not scheduled (Log call as completed)' : _formatDate(_selectedDate!),
+                        style: const TextStyle(color: Color(0xFF00695C)),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_selectedDate != null)
+                            IconButton(
+                              icon: const Icon(Icons.clear, color: Color(0xFF00695C)),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedDate = null;
+                                  _selectedTime = null;
+                                });
+                              },
+                            ),
+                          const Icon(Icons.calendar_today, color: Color(0xFF00695C)),
+                        ],
+                      ),
+                      onTap: _selectDate,
                     ),
-                    onTap: _selectDate,
                   ),
-                  const Divider(),
+                  const SizedBox(height: 12),
 
                   if (_selectedDate != null) ...[
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Next Call Time (Optional)'),
-                      subtitle: Text(
-                        _selectedTime == null ? 'Not set' : _selectedTime!.format(context),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      trailing: const Icon(Icons.access_time),
-                      onTap: _selectTime,
+                      child: ListTile(
+                        title: const Text('Next Call Time (Optional)', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40))),
+                        subtitle: Text(
+                          _selectedTime == null ? 'Not set' : _selectedTime!.format(context),
+                          style: const TextStyle(color: Color(0xFF00695C)),
+                        ),
+                        trailing: const Icon(Icons.access_time, color: Color(0xFF00695C)),
+                        onTap: _selectTime,
+                      ),
                     ),
-                    const Divider(),
+                    const SizedBox(height: 12),
                   ],
 
                   TextField(
                     controller: _notesController,
                     maxLines: 3,
+                    style: const TextStyle(color: Color(0xFF004D40)),
                     decoration: const InputDecoration(
                       labelText: 'Call Outcome Notes',
+                      labelStyle: TextStyle(color: Color(0xFF00695C)),
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(),
+                      fillColor: Color(0xFFF5F5F5),
+                      filled: true,
                       hintText: 'Enter notes describing the call...',
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  Row(
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancel'),
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF00695C),
+                          side: const BorderSide(color: Color(0xFF00695C)),
                         ),
+                        child: const Text('Cancel', maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _submit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary,
-                            foregroundColor: theme.colorScheme.onPrimary,
-                          ),
-                          child: Text(_selectedDate == null ? 'Log Call as Done' : 'Reschedule & Save'),
+                      ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00695C),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(
+                          _selectedDate == null ? 'Log Call as Done' : 'Reschedule & Save',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
