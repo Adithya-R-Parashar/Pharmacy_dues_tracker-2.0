@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'package:provider/provider.dart';
 import '../data/pharmacy_repository.dart';
 import '../services/formatters.dart';
@@ -210,8 +211,13 @@ class _SalesmanViewState extends State<SalesmanView> {
     final theme = Theme.of(context);
     final cardA = Colors.white.withValues(alpha: 0.95);
     const cardB = Color(0xFFE0F2F1);
-
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(     // ← add
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(                                 // ← existing, now nested
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -398,6 +404,7 @@ class _SalesmanViewState extends State<SalesmanView> {
                   ],
                 ),
         ),
+      ),
       ),
     );
   }

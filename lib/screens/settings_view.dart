@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../data/database_helper.dart';
 import '../providers/app_state.dart';
@@ -105,8 +106,13 @@ class _SettingsViewState extends State<SettingsView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    return Scaffold(
+  return AnnotatedRegion<SystemUiOverlayStyle>(     // ← add
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(                                 // ← existing, now nested
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -220,6 +226,7 @@ class _SettingsViewState extends State<SettingsView> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

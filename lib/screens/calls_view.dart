@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/pharmacy.dart';
 import '../models/reminder.dart';
@@ -129,8 +130,13 @@ class _CallsViewState extends State<CallsView> {
           : (rem.salesmanName ?? '');
       return name.toLowerCase().contains(_filterQuery.toLowerCase());
     }).toList();
-
-    return Scaffold(
+return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -286,6 +292,7 @@ class _CallsViewState extends State<CallsView> {
                 ],
               ),
         ),
+      ),
       ),
     );
   }
