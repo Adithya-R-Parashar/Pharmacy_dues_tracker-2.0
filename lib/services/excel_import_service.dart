@@ -4,6 +4,44 @@ import 'package:flutter/foundation.dart';
 import '../data/database_helper.dart';
 import '../data/city_alias_repository.dart';
 
+int _levenshteinDistance(String a, String b) {
+  final la = a.length, lb = b.length;
+  if (la == 0) return lb;
+  if (lb == 0) return la;
+  List<int> prev = List<int>.generate(lb + 1, (j) => j);
+  List<int> curr = List<int>.filled(lb + 1, 0);
+  for (int i = 1; i <= la; i++) {
+    curr[0] = i;
+    for (int j = 1; j <= lb; j++) {
+      final cost = a[i - 1] == b[j - 1] ? 0 : 1;
+      final deletion = prev[j] + 1;
+      final insertion = curr[j - 1] + 1;
+      final substitution = prev[j - 1] + cost;
+      curr[j] = [deletion, insertion, substitution].reduce((x, y) => x < y ? x : y);
+    }
+    final tmp = prev;
+    prev = curr;
+    curr = tmp;
+  }
+  return prev[lb];
+}
+
+/// Returns true if [haystack] contains [keyword] exactly, or contains a substring
+/// close enough to [keyword] to be a likely typo (edit distance <= 1 for short
+/// keywords, <= 2 for longer ones).
+bool _fuzzyContains(String haystack, String keyword) {
+  if (haystack.contains(keyword)) return true;
+  final maxDistance = keyword.length <= 5 ? 1 : 2;
+  final klen = keyword.length;
+  for (int start = 0; start < haystack.length; start++) {
+    for (int len = (klen - maxDistance).clamp(1, klen + maxDistance); len <= (klen + maxDistance) && start + len <= haystack.length; len++) {
+      final window = haystack.substring(start, start + len);
+      if (_levenshteinDistance(window, keyword) <= maxDistance) return true;
+    }
+  }
+  return false;
+}
+
 class ImportResult {
   final int newPharmacies;
   final int matchedPharmacies;
@@ -127,6 +165,7 @@ class ExcelImportService {
         final partyName = row['partyName'] as String;
         final salesman = row['salesman'] as String?;
         final city = row['city'] as String?;
+        final category = row['category'] as String?;
         final resolvedCity = city != null ? (aliasMap[city.trim().toLowerCase()] ?? city.trim()) : null;
         final totalAmount = row['totalAmount'] as double;
         final bucket121180 = row['bucket121180'] as double?;
@@ -148,6 +187,7 @@ class ExcelImportService {
             'name': partyName,
             'salesman': salesman,
             'city': resolvedCity,
+            'category': category,
             'total_amount': totalAmount,
             'bucket_121_180': bucket121180,
             'bucket_181_270': bucket181270,
@@ -165,6 +205,7 @@ class ExcelImportService {
               'name': partyName,
               'salesman': salesman,
               'city': resolvedCity,
+              'category': category,
               'total_amount': totalAmount,
               'bucket_121_180': bucket121180,
               'bucket_181_270': bucket181270,
@@ -211,6 +252,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
   int? partyNameIdx;
   int? salesmanIdx;
   int? cityIdx;
+  int? categoryIdx;
   int? totalAmountIdx;
   int? bucket121180Idx;
   int? bucket181270Idx;
@@ -224,21 +266,23 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
     final lower = cellVal.toLowerCase();
     final clean = lower.replaceAll(RegExp(r'[\s_\-\.\,\/\(\)\:]'), '');
 
-    if (clean.contains('code') && partyCodeIdx == null) {
+    if (_fuzzyContains(clean, 'code') && partyCodeIdx == null) {
       partyCodeIdx = i;
-    } else if (clean.contains('salesman') && salesmanIdx == null) {
+    } else if (_fuzzyContains(clean, 'salesman') && salesmanIdx == null) {
       salesmanIdx = i;
-    } else if ((clean.contains('city') || clean.contains('area')) && cityIdx == null) {
+    } else if ((_fuzzyContains(clean, 'city') || _fuzzyContains(clean, 'area')) && cityIdx == null) {
       cityIdx = i;
-    } else if (clean.contains('121') && clean.contains('180') && bucket121180Idx == null) {
+    } else if (clean.contains('121') && (clean.contains('150') || clean.contains('180')) && bucket121180Idx == null) {
       bucket121180Idx = i;
-    } else if (clean.contains('181') && clean.contains('270') && bucket181270Idx == null) {
+    } else if ((clean.contains('151') || clean.contains('181')) && clean.contains('270') && bucket181270Idx == null) {
       bucket181270Idx = i;
     } else if (clean.contains('271') && clean.contains('360') && bucket271360Idx == null) {
       bucket271360Idx = i;
-    } else if ((clean.contains('amount') || lower == 'total') && totalAmountIdx == null) {
+    } else if (_fuzzyContains(clean, 'category') && categoryIdx == null) {
+      categoryIdx = i;
+    } else if ((_fuzzyContains(clean, 'amount') || lower == 'total') && totalAmountIdx == null) {
       totalAmountIdx = i;
-    } else if (clean.contains('party') && partyNameIdx == null) {
+    } else if (_fuzzyContains(clean, 'party') && partyNameIdx == null) {
       partyNameIdx = i;
     }
   }
@@ -258,6 +302,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
   String? lastPartyName;
   String? lastSalesman;
   String? lastCity;
+  String? lastCategory;
 
   for (int r = 1; r < sheet.rows.length; r++) {
     final row = sheet.rows[r];
@@ -272,6 +317,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       bucket271360Idx,
       salesmanIdx,
       cityIdx,
+      categoryIdx,
     ];
     for (final idx in mappedIndices) {
       if (idx != null && idx < row.length) {
@@ -302,6 +348,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
     final partyNameVal = partyNameIdx < row.length ? row[partyNameIdx]?.value : null;
     final salesmanVal = (salesmanIdx != null && salesmanIdx < row.length) ? row[salesmanIdx]?.value : null;
     final cityVal = (cityIdx != null && cityIdx < row.length) ? row[cityIdx]?.value : null;
+    final categoryVal = (categoryIdx != null && categoryIdx < row.length) ? row[categoryIdx]?.value : null;
     final totalAmountVal = totalAmountIdx < row.length ? row[totalAmountIdx]?.value : null;
     final bucket121180Val = (bucket121180Idx != null && bucket181270Idx != null && bucket121180Idx < row.length) ? row[bucket121180Idx]?.value : null;
     final bucket181270Val = (bucket181270Idx != null && bucket181270Idx < row.length) ? row[bucket181270Idx]?.value : null;
@@ -311,6 +358,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
     final rawPartyName = ExcelImportService.cellValueToString(partyNameVal)?.trim();
     final rawSalesman = ExcelImportService.cellValueToString(salesmanVal)?.trim();
     final rawCity = ExcelImportService.cellValueToString(cityVal)?.trim();
+    final rawCategory = ExcelImportService.cellValueToString(categoryVal)?.trim();
 
     if (rawPartyCode != null && rawPartyCode.isNotEmpty) {
       lastPartyCode = rawPartyCode;
@@ -324,11 +372,15 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
     if (rawCity != null && rawCity.isNotEmpty) {
       lastCity = rawCity;
     }
+    if (rawCategory != null && rawCategory.isNotEmpty) {
+      lastCategory = rawCategory;
+    }
 
     final partyCode = (rawPartyCode == null || rawPartyCode.isEmpty) ? lastPartyCode : rawPartyCode;
     final partyName = (rawPartyName == null || rawPartyName.isEmpty) ? lastPartyName : rawPartyName;
     final salesman = (rawSalesman == null || rawSalesman.isEmpty) ? lastSalesman : rawSalesman;
     final city = (rawCity == null || rawCity.isEmpty) ? lastCity : rawCity;
+    final category = (rawCategory == null || rawCategory.isEmpty) ? lastCategory : rawCategory;
 
     if (partyCode == null || partyCode.isEmpty) {
       skippedInvalidRows++;
@@ -376,6 +428,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       'partyName': partyName,
       'salesman': salesman,
       'city': city,
+      'category': category,
       'totalAmount': parsedTotalAmount,
       'bucket121180': parsedBucket121180,
       'bucket181270': parsedBucket181270,

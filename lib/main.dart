@@ -207,10 +207,8 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: IndexedStack(
-        child: IndexedStack(
-          index: appState.currentTab,
-          children: _views,
-        ),
+        index: appState.currentTab,
+        children: _views,
       ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: appState.currentTab,

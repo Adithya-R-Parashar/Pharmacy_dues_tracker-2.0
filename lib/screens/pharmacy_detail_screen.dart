@@ -300,6 +300,26 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
                                   ],
                                 ),
                               ],
+                              if (_pharmacy.category != null && _pharmacy.category!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Category: ',
+                                      style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        _pharmacy.category!,
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: const Color(0xFF004D40),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -369,7 +389,7 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            '121 - 180 Days:',
+                                            '121 - 150 Days:',
                                             style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
                                           ),
                                         ),
@@ -391,7 +411,7 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
                                       children: [
                                         Expanded(
                                           child: Text(
-                                            '181 - 270 Days:',
+                                            '151 - 270 Days:',
                                             style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF00695C)),
                                           ),
                                         ),

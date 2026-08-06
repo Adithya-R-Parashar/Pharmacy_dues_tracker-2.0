@@ -11,6 +11,7 @@ class Pharmacy {
   final String? lastImportDate;
   final String? notes;
   final String createdAt; // Format: yyyy-MM-dd HH:mm:ss
+  final String? category;
 
   Pharmacy({
     this.id,
@@ -25,6 +26,7 @@ class Pharmacy {
     this.lastImportDate,
     this.notes,
     required this.createdAt,
+    this.category,
   });
 
   factory Pharmacy.fromMap(Map<String, dynamic> map) {
@@ -41,6 +43,7 @@ class Pharmacy {
       lastImportDate: map['last_import_date'] as String?,
       notes: map['notes'] as String?,
       createdAt: map['created_at'] as String,
+      category: map['category'] as String?,
     );
   }
 
@@ -58,11 +61,12 @@ class Pharmacy {
       'last_import_date': lastImportDate,
       'notes': notes,
       'created_at': createdAt,
+      'category': category,
     };
   }
 
   @override
   String toString() {
-    return 'Pharmacy(id: $id, partyCode: $partyCode, name: $name, salesman: $salesman, city: $city, totalAmount: $totalAmount, bucket121180: $bucket121180, bucket181270: $bucket181270, bucket271360: $bucket271360, lastImportDate: $lastImportDate, notes: $notes, createdAt: $createdAt)';
+    return 'Pharmacy(id: $id, partyCode: $partyCode, name: $name, salesman: $salesman, city: $city, totalAmount: $totalAmount, bucket121180: $bucket121180, bucket181270: $bucket181270, bucket271360: $bucket271360, lastImportDate: $lastImportDate, notes: $notes, createdAt: $createdAt, category: $category)';
   }
 }

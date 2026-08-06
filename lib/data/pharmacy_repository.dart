@@ -113,10 +113,23 @@ class PharmacyRepository {
     return results.map((row) => row['city'] as String).toList();
   }
 
+  /// Sorted list of distinct, non-null category values for filter dropdowns.
+  Future<List<String>> getDistinctCategories() async {
+    final db = await DatabaseHelper.instance.database;
+    final results = await db.rawQuery('''
+      SELECT DISTINCT TRIM(category) AS category 
+      FROM pharmacies 
+      WHERE category IS NOT NULL AND TRIM(category) != ''
+      ORDER BY category COLLATE NOCASE ASC
+    ''');
+    return results.map((row) => row['category'] as String).toList();
+  }
+
   /// Returns pharmacies matching provided filters (AND logic), sorted by total_amount according to sortOrder ('DESC' or 'ASC').
   Future<List<Pharmacy>> getFilteredPharmacies({
     String? city,
     String? salesman,
+    String? category,
     String sortOrder = 'DESC',
   }) async {
     final db = await DatabaseHelper.instance.database;
@@ -132,6 +145,11 @@ class PharmacyRepository {
     if (salesman != null && salesman.trim().isNotEmpty) {
       whereClauses.add("TRIM(salesman) = ? COLLATE NOCASE");
       whereArgs.add(salesman.trim());
+    }
+
+    if (category != null && category.trim().isNotEmpty) {
+      whereClauses.add("TRIM(category) = ? COLLATE NOCASE");
+      whereArgs.add(category.trim());
     }
 
     String query = 'SELECT * FROM pharmacies';

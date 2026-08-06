@@ -19,9 +19,16 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 8) {
+      await db.execute('ALTER TABLE pharmacies ADD COLUMN category TEXT;');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -38,7 +45,8 @@ class DatabaseHelper {
         bucket_271_360 REAL,
         last_import_date TEXT,
         notes TEXT,
-        created_at TEXT
+        created_at TEXT,
+        category TEXT
       );
     ''');
 

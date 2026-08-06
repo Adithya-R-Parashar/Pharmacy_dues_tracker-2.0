@@ -33,12 +33,14 @@ class _DashboardViewState extends State<DashboardView> {
   // Filter States
   String? _filterCity;
   String? _filterSalesman;
+  String? _filterCategory;
   String _sortOrder = 'DESC'; // 'DESC' = Highest to Lowest, 'ASC' = Lowest to Highest
 
   List<String> _citiesList = [];
   List<String> _salesmenList = [];
+  List<String> _categoriesList = [];
 
-  bool get _hasFilters => _filterCity != null || _filterSalesman != null || _sortOrder != 'DESC';
+  bool get _hasFilters => _filterCity != null || _filterSalesman != null || _filterCategory != null || _sortOrder != 'DESC';
 
   @override
   void initState() {
@@ -62,6 +64,7 @@ class _DashboardViewState extends State<DashboardView> {
 
     final reminders = await _reminderRepo.getScheduledOn(todayStr);
     final cities = await _pharmacyRepo.getDistinctCities();
+    final categories = await _pharmacyRepo.getDistinctCategories();
     final summaries = await _pharmacyRepo.getSalesmenSummary();
     final salesmen = summaries.map((s) => s.salesman).toList();
 
@@ -70,6 +73,7 @@ class _DashboardViewState extends State<DashboardView> {
       list = await _pharmacyRepo.getFilteredPharmacies(
         city: _filterCity,
         salesman: _filterSalesman,
+        category: _filterCategory,
         sortOrder: _sortOrder,
       );
     } else {
@@ -96,6 +100,7 @@ class _DashboardViewState extends State<DashboardView> {
         _receivables = list;
         _citiesList = cities;
         _salesmenList = salesmen;
+        _categoriesList = categories;
         _isLoading = false;
       });
     }
@@ -128,6 +133,7 @@ class _DashboardViewState extends State<DashboardView> {
       builder: (context) {
         String? tempCity = _filterCity;
         String? tempSalesman = _filterSalesman;
+        String? tempCategory = _filterCategory;
         String tempSortOrder = _sortOrder;
 
         return StatefulBuilder(
@@ -164,6 +170,7 @@ class _DashboardViewState extends State<DashboardView> {
                             setSheetState(() {
                               tempCity = null;
                               tempSalesman = null;
+                              tempCategory = null;
                               tempSortOrder = 'DESC';
                             });
                           },
@@ -235,6 +242,36 @@ class _DashboardViewState extends State<DashboardView> {
                     const SizedBox(height: 16),
 
                     Text(
+                      'Category',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: const Color(0xFF00695C),
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      initialValue: tempCategory,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      hint: const Text('All Categories'),
+                      items: _categoriesList.map((cat) {
+                        return DropdownMenuItem<String>(
+                          value: cat,
+                          child: Text(cat, overflow: TextOverflow.ellipsis),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setSheetState(() {
+                          tempCategory = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+
+                    Text(
                       'Sort by Amount',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: const Color(0xFF00695C),
@@ -300,6 +337,7 @@ class _DashboardViewState extends State<DashboardView> {
                             setState(() {
                               _filterCity = tempCity;
                               _filterSalesman = tempSalesman;
+                              _filterCategory = tempCategory;
                               _sortOrder = tempSortOrder;
                             });
                             _loadData();
@@ -665,6 +703,16 @@ class _DashboardViewState extends State<DashboardView> {
                                       _loadData();
                                     },
                                   ),
+                                if (_filterCategory != null)
+                                  Chip(
+                                    label: Text('Category: $_filterCategory', overflow: TextOverflow.ellipsis),
+                                    onDeleted: () {
+                                      setState(() {
+                                        _filterCategory = null;
+                                      });
+                                      _loadData();
+                                    },
+                                  ),
                                 if (_sortOrder != 'DESC')
                                   Chip(
                                     label: const Text('Sort: Lowest First'),
@@ -682,6 +730,7 @@ class _DashboardViewState extends State<DashboardView> {
                                     setState(() {
                                       _filterCity = null;
                                       _filterSalesman = null;
+                                      _filterCategory = null;
                                       _sortOrder = 'DESC';
                                     });
                                     _loadData();
@@ -749,7 +798,7 @@ class _DashboardViewState extends State<DashboardView> {
                                                       ),
                                                       const SizedBox(height: 4),
                                                       Text(
-                                                        'Party Code: ${ph.partyCode}${ph.city != null && ph.city!.isNotEmpty ? ' | ${ph.city}' : ''}',
+                                                        'Party Code: ${ph.partyCode}${ph.city != null && ph.city!.isNotEmpty ? ' | ${ph.city}' : ''}${ph.category != null && ph.category!.isNotEmpty ? ' | Cat: ${ph.category}' : ''}',
                                                         style: theme.textTheme.bodySmall?.copyWith(color: const Color(0xFF00695C)),
                                                       ),
                                                     ],

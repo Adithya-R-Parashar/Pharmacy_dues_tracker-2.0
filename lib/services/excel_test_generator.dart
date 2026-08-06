@@ -14,8 +14,8 @@ class ExcelTestGenerator {
       TextCellValue('Sales Man'),
       TextCellValue('City'),
       TextCellValue('Amount'),
-      TextCellValue('121 - 180 Days'),
-      TextCellValue('181 - 270 Days'),
+      TextCellValue('121 - 150 Days'),
+      TextCellValue('151 - 270 Days'),
       TextCellValue('271 - 360 Days'),
     ]);
 
