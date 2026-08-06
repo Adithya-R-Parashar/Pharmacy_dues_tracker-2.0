@@ -280,7 +280,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       bucket271360Idx = i;
     } else if (_fuzzyContains(clean, 'category') && categoryIdx == null) {
       categoryIdx = i;
-    } else if ((_fuzzyContains(clean, 'amount') || lower == 'total') && totalAmountIdx == null) {
+    } else if ((_fuzzyContains(clean, 'amount') || _fuzzyContains(clean, 'due') || lower == 'total') && totalAmountIdx == null) {
       totalAmountIdx = i;
     } else if (_fuzzyContains(clean, 'party') && partyNameIdx == null) {
       partyNameIdx = i;
