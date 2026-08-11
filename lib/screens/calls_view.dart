@@ -11,6 +11,7 @@ import '../theme.dart';
 import 'call_dialog.dart';
 import 'pharmacy_detail_screen.dart';
 import 'salesman_detail_screen.dart';
+import '../services/phone_call_service.dart';
 
 class CallsView extends StatefulWidget {
   const CallsView({super.key});
@@ -35,6 +36,7 @@ class _CallsViewState extends State<CallsView> {
   Map<int, Pharmacy> _pharmacyCache = {};
   Map<int, double> _pharmacyDues = {};
   Map<String, double> _salesmanDues = {};
+  Map<String, String> _salesmanPhones = {};
 
   @override
   void initState() {
@@ -89,6 +91,7 @@ class _CallsViewState extends State<CallsView> {
     for (final s in salesmanSummaries) {
       salesmanDuesMap[s.salesman.toLowerCase().trim()] = s.totalDue;
     }
+    final salesmanPhones = await _pharmacyRepo.getAllSalesmanPhones();
 
     double sum = 0.0;
     final seenPharmacies = <int>{};
@@ -115,6 +118,7 @@ class _CallsViewState extends State<CallsView> {
         _pharmacyCache = tempCache;
         _pharmacyDues = tempDues;
         _salesmanDues = salesmanDuesMap;
+        _salesmanPhones = salesmanPhones;
         _isLoading = false;
       });
     }
@@ -283,6 +287,7 @@ return AnnotatedRegion<SystemUiOverlayStyle>(
                                 reminder: rem,
                                 pharmacy: pharmacy,
                                 totalDue: totalDue,
+                                phoneNumber: !isPharmacy ? _salesmanPhones[rem.salesmanName?.toLowerCase().trim()] : null,
                                 itemIndex: index,
                                 onAction: _loadData,
                               );
@@ -302,6 +307,7 @@ class ReminderQueueCard extends StatefulWidget {
   final Reminder reminder;
   final Pharmacy? pharmacy;
   final double totalDue;
+  final String? phoneNumber;
   final int itemIndex;
   final VoidCallback onAction;
 
@@ -310,6 +316,7 @@ class ReminderQueueCard extends StatefulWidget {
     required this.reminder,
     this.pharmacy,
     required this.totalDue,
+    this.phoneNumber,
     required this.itemIndex,
     required this.onAction,
   });
@@ -568,6 +575,15 @@ class _ReminderQueueCardState extends State<ReminderQueueCard> {
                   icon: const Icon(Icons.edit_calendar, color: Color(0xFF00695C)),
                   label: const Text('Reschedule', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFF00695C))),
                 ),
+                if (!isPharmacy && widget.phoneNumber != null)
+                  IconButton(
+                    onPressed: () => PhoneCallService.call(context, widget.phoneNumber),
+                    icon: const Icon(Icons.call, color: Color(0xFF00695C)),
+                    tooltip: 'Call Salesman',
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF00695C).withValues(alpha: 0.1),
+                    ),
+                  ),
                 IconButton(
                   onPressed: () => _openCallDialog(widget.pharmacy, widget.reminder.salesmanName, widget.reminder),
                   icon: const Icon(Icons.phone_in_talk, color: Color(0xFF00695C)),

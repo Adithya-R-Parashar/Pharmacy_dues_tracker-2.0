@@ -7,6 +7,7 @@ import '../data/reminder_repository.dart';
 import '../services/formatters.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
+import '../services/phone_call_service.dart';
 import 'call_dialog.dart';
 import 'pharmacy_detail_screen.dart';
 
@@ -30,6 +31,7 @@ class _SalesmanDetailScreenState extends State<SalesmanDetailScreen> {
   List<Pharmacy> _pharmacies = [];
   List<Reminder> _callHistory = [];
   double _totalDues = 0.0;
+  String? _phoneNumber;
 
   @override
   void initState() {
@@ -51,6 +53,7 @@ class _SalesmanDetailScreenState extends State<SalesmanDetailScreen> {
 
     final phList = await _pharmacyRepo.getPharmaciesBySalesman(widget.salesmanName);
     final history = await _reminderRepo.getBySalesman(widget.salesmanName);
+    final phone = await _pharmacyRepo.getSalesmanPhone(widget.salesmanName);
 
     double sum = 0.0;
     for (final ph in phList) {
@@ -62,9 +65,14 @@ class _SalesmanDetailScreenState extends State<SalesmanDetailScreen> {
         _pharmacies = phList;
         _callHistory = history;
         _totalDues = sum;
+        _phoneNumber = phone;
         _isLoading = false;
       });
     }
+  }
+
+  void _callSalesman() {
+    PhoneCallService.call(context, _phoneNumber);
   }
 
   void _openLogCallDialog() {
@@ -114,8 +122,8 @@ class _SalesmanDetailScreenState extends State<SalesmanDetailScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.phone_in_talk, color: Color(0xFF00695C)),
-            onPressed: _openLogCallDialog,
+            icon: const Icon(Icons.call, color: Color(0xFF00695C)),
+            onPressed: _callSalesman,
           ),
         ],
       ),

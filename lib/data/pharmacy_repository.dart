@@ -244,4 +244,43 @@ class PharmacyRepository {
     ''', [salesmanName.trim()]);
     return maps.map((map) => Pharmacy.fromMap(map)).toList();
   }
+
+  /// Insert or update a salesman's phone number. Safe to call repeatedly with
+  /// the same name — matches case-insensitively via the table's COLLATE NOCASE key.
+  Future<void> upsertSalesmanPhone(String name, String? phoneNumber) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return;
+    final db = await DatabaseHelper.instance.database;
+    await db.rawInsert('''
+      INSERT INTO salesmen (name, phone_number) VALUES (?, ?)
+      ON CONFLICT(name) DO UPDATE SET phone_number = excluded.phone_number
+      WHERE excluded.phone_number IS NOT NULL AND TRIM(excluded.phone_number) != ''
+    ''', [trimmedName, phoneNumber]);
+  }
+
+  /// Map of salesman name (lowercased, trimmed) -> phone number, for bulk lookups in lists.
+  Future<Map<String, String>> getAllSalesmanPhones() async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query('salesmen', where: "phone_number IS NOT NULL AND TRIM(phone_number) != ''");
+    final map = <String, String>{};
+    for (final row in rows) {
+      final name = (row['name'] as String).toLowerCase().trim();
+      map[name] = row['phone_number'] as String;
+    }
+    return map;
+  }
+
+  /// Single lookup for one salesman's phone number, or null if not on file.
+  Future<String?> getSalesmanPhone(String name) async {
+    final db = await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'salesmen',
+      columns: ['phone_number'],
+      where: 'name = ? COLLATE NOCASE',
+      whereArgs: [name.trim()],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['phone_number'] as String?;
+  }
 }

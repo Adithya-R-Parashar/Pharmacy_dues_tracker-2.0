@@ -7,6 +7,7 @@ import '../data/pharmacy_repository.dart';
 import '../data/reminder_repository.dart';
 import '../providers/app_state.dart';
 import '../services/notification_service.dart';
+import '../services/phone_call_service.dart';
 
 class LogRescheduleCallDialog extends StatefulWidget {
   final Pharmacy? pharmacy;
@@ -31,6 +32,7 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
   String _targetType = 'pharmacy';
   Pharmacy? _selectedPharmacy;
   String? _selectedSalesmanName;
+  String? _selectedSalesmanPhone;
 
   String _searchQuery = '';
   List<Pharmacy> _searchResults = [];
@@ -79,6 +81,19 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
       _selectedSalesmanName = null;
       _isSearching = true;
       _performSearch('');
+    }
+
+    if (_selectedSalesmanName != null) {
+      _fetchSalesmanPhone(_selectedSalesmanName!);
+    }
+  }
+
+  Future<void> _fetchSalesmanPhone(String name) async {
+    final phone = await _pharmacyRepo.getSalesmanPhone(name);
+    if (mounted) {
+      setState(() {
+        _selectedSalesmanPhone = phone;
+      });
     }
   }
 
@@ -400,11 +415,12 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                                       style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
                                     ),
                                     onTap: () {
-                                      setState(() {
-                                        _selectedSalesmanName = name;
-                                        _isSearching = false;
-                                      });
-                                    },
+                                       setState(() {
+                                         _selectedSalesmanName = name;
+                                         _isSearching = false;
+                                       });
+                                       _fetchSalesmanPhone(name);
+                                     },
                                   ),
                                 );
                               },
@@ -464,19 +480,25 @@ class _LogRescheduleCallDialogState extends State<LogRescheduleCallDialog> {
                                   ],
                                 ),
                               ),
-                              if (widget.pharmacy == null && widget.salesmanName == null && widget.reminder == null)
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _isSearching = true;
-                                      _searchResults = [];
-                                      _searchQuery = '';
-                                      _salesmanSearchResults = [];
-                                      _salesmanSearchQuery = '';
-                                    });
-                                  },
-                                  child: const Text('Change', style: TextStyle(color: Color(0xFF00695C))),
-                                ),
+                               if (_targetType == 'salesman')
+                                 IconButton(
+                                   icon: const Icon(Icons.call, color: Color(0xFF00695C)),
+                                   tooltip: 'Call Salesman',
+                                   onPressed: () => PhoneCallService.call(context, _selectedSalesmanPhone),
+                                 ),
+                               if (widget.pharmacy == null && widget.salesmanName == null && widget.reminder == null)
+                                 TextButton(
+                                   onPressed: () {
+                                     setState(() {
+                                       _isSearching = true;
+                                       _searchResults = [];
+                                       _searchQuery = '';
+                                       _salesmanSearchResults = [];
+                                       _salesmanSearchQuery = '';
+                                     });
+                                   },
+                                   child: const Text('Change', style: TextStyle(color: Color(0xFF00695C))),
+                                 ),
                             ],
                           ),
                   ),

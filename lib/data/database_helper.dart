@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -28,6 +28,14 @@ class DatabaseHelper {
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 8) {
       await db.execute('ALTER TABLE pharmacies ADD COLUMN category TEXT;');
+    }
+    if (oldVersion < 9) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS salesmen (
+          name TEXT PRIMARY KEY COLLATE NOCASE,
+          phone_number TEXT
+        );
+      ''');
     }
   }
 
@@ -70,6 +78,13 @@ class DatabaseHelper {
         raw_value TEXT PRIMARY KEY COLLATE NOCASE,
         canonical_city TEXT,
         created_at TEXT
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE salesmen (
+        name TEXT PRIMARY KEY COLLATE NOCASE,
+        phone_number TEXT
       );
     ''');
   }
