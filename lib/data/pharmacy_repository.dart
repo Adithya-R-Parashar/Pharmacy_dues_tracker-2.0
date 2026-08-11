@@ -1,4 +1,5 @@
 // ignore_for_file: avoid_print
+import 'package:sqflite/sqflite.dart';
 import '../models/pharmacy.dart';
 import 'database_helper.dart';
 
@@ -247,10 +248,10 @@ class PharmacyRepository {
 
   /// Insert or update a salesman's phone number. Safe to call repeatedly with
   /// the same name — matches case-insensitively via the table's COLLATE NOCASE key.
-  Future<void> upsertSalesmanPhone(String name, String? phoneNumber) async {
+  Future<void> upsertSalesmanPhone(String name, String? phoneNumber, {DatabaseExecutor? executor}) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) return;
-    final db = await DatabaseHelper.instance.database;
+    final db = executor ?? await DatabaseHelper.instance.database;
     await db.rawInsert('''
       INSERT INTO salesmen (name, phone_number) VALUES (?, ?)
       ON CONFLICT(name) DO UPDATE SET phone_number = excluded.phone_number

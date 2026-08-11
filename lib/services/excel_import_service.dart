@@ -77,7 +77,13 @@ class ExcelImportService {
     if (cellValue == null) return null;
     if (cellValue is excel.TextCellValue) return cellValue.value.text;
     if (cellValue is excel.IntCellValue) return cellValue.value.toString();
-    if (cellValue is excel.DoubleCellValue) return cellValue.value.toString();
+    if (cellValue is excel.DoubleCellValue) {
+      final d = cellValue.value;
+      if (d == d.truncateToDouble()) {
+        return d.toInt().toString();
+      }
+      return d.toString();
+    }
     if (cellValue is excel.BoolCellValue) return cellValue.value.toString();
     if (cellValue is excel.DateCellValue) {
       return '${cellValue.year.toString().padLeft(4, '0')}-${cellValue.month.toString().padLeft(2, '0')}-${cellValue.day.toString().padLeft(2, '0')}';
@@ -224,7 +230,7 @@ class ExcelImportService {
         final salesmanName = salesman;
         final phone = row['phone'] as String?;
         if (salesmanName != null && salesmanName.trim().isNotEmpty && phone != null && phone.trim().isNotEmpty) {
-          await PharmacyRepository().upsertSalesmanPhone(salesmanName, phone);
+          await PharmacyRepository().upsertSalesmanPhone(salesmanName, phone, executor: txn);
         }
 
         if (onProgress != null) {
