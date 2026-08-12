@@ -83,9 +83,9 @@ class ExcelTestGenerator {
       TextCellValue('Kumar'),
       TextCellValue('Mumbai'),
       TextCellValue(''), // Missing amount
-      DoubleCellValue(0.0),
-      DoubleCellValue(0.0),
-      DoubleCellValue(0.0),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
     ]);
 
     // Row 4: Text in amount field (should skip)
@@ -95,9 +95,9 @@ class ExcelTestGenerator {
       TextCellValue('Ravi'),
       TextCellValue('Delhi'),
       TextCellValue('unparseable_text'),
-      DoubleCellValue(0.0),
-      DoubleCellValue(0.0),
-      DoubleCellValue(0.0),
+      TextCellValue(''),
+      TextCellValue(''),
+      TextCellValue(''),
     ]);
 
     // Row 5: Valid (Delta Pharmacy)

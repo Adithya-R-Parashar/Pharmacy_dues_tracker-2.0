@@ -368,7 +368,7 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
     final categoryVal = (categoryIdx != null && categoryIdx < row.length) ? row[categoryIdx]?.value : null;
     final phoneVal = (phoneIdx != null && phoneIdx < row.length) ? row[phoneIdx]?.value : null;
     final totalAmountVal = totalAmountIdx < row.length ? row[totalAmountIdx]?.value : null;
-    final bucket121180Val = (bucket121180Idx != null && bucket181270Idx != null && bucket121180Idx < row.length) ? row[bucket121180Idx]?.value : null;
+    final bucket121180Val = (bucket121180Idx != null && bucket121180Idx < row.length) ? row[bucket121180Idx]?.value : null;
     final bucket181270Val = (bucket181270Idx != null && bucket181270Idx < row.length) ? row[bucket181270Idx]?.value : null;
     final bucket271360Val = (bucket271360Idx != null && bucket271360Idx < row.length) ? row[bucket271360Idx]?.value : null;
 
@@ -412,15 +412,6 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       continue;
     }
 
-    final double parsedTotalAmount;
-    try {
-      parsedTotalAmount = ExcelImportService.parseDouble(totalAmountVal);
-    } catch (_) {
-      skippedInvalidRows++;
-      skippedReasons.add('Row ${r + 1}: missing or invalid total amount value');
-      continue;
-    }
-
     double? parsedBucket121180;
     if (bucket121180Val != null) {
       try {
@@ -440,6 +431,25 @@ Map<String, dynamic> parseExcelIsolate(Uint8List bytes) {
       try {
         parsedBucket271360 = ExcelImportService.parseDouble(bucket271360Val);
       } catch (_) {}
+    }
+
+    double? parsedTotalAmount;
+    try {
+      parsedTotalAmount = ExcelImportService.parseDouble(totalAmountVal);
+    } catch (_) {
+      // Total Amount cell may be a formula (e.g. "=D2+E2+F2") rather than a literal
+      // number — the excel package only exposes the formula text, not its computed
+      // result, so fall back to computing it ourselves as the sum of the three
+      // aging buckets, which is what that formula represents in practice.
+      final hasAnyBucket = parsedBucket121180 != null || parsedBucket181270 != null || parsedBucket271360 != null;
+      if (hasAnyBucket) {
+        parsedTotalAmount = (parsedBucket121180 ?? 0) + (parsedBucket181270 ?? 0) + (parsedBucket271360 ?? 0);
+      }
+    }
+    if (parsedTotalAmount == null) {
+      skippedInvalidRows++;
+      skippedReasons.add('Row ${r + 1}: missing or invalid total amount value');
+      continue;
     }
 
     parsedRows.add({
