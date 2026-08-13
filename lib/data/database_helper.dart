@@ -19,7 +19,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -35,6 +35,29 @@ class DatabaseHelper {
           name TEXT PRIMARY KEY COLLATE NOCASE,
           phone_number TEXT
         );
+      ''');
+    }
+    if (oldVersion < 10) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS voice_notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          pharmacy_id INTEGER NOT NULL,
+          file_path TEXT NOT NULL,
+          duration_seconds INTEGER,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (pharmacy_id) REFERENCES pharmacies (id) ON DELETE CASCADE
+        );
+      ''');
+      await db.execute('''
+        UPDATE pharmacies
+        SET category = CASE
+          WHEN COALESCE(total_amount, 0) >= 100000 THEN 'A'
+          WHEN COALESCE(total_amount, 0) >= 50000 THEN 'B'
+          WHEN COALESCE(total_amount, 0) >= 10000 THEN 'C'
+          WHEN COALESCE(total_amount, 0) >= 5000 THEN 'D'
+          ELSE 'E'
+        END
+        WHERE category IS NULL OR TRIM(category) = '';
       ''');
     }
   }
@@ -85,6 +108,17 @@ class DatabaseHelper {
       CREATE TABLE salesmen (
         name TEXT PRIMARY KEY COLLATE NOCASE,
         phone_number TEXT
+      );
+    ''');
+
+    await db.execute('''
+      CREATE TABLE voice_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pharmacy_id INTEGER NOT NULL,
+        file_path TEXT NOT NULL,
+        duration_seconds INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (pharmacy_id) REFERENCES pharmacies (id) ON DELETE CASCADE
       );
     ''');
   }

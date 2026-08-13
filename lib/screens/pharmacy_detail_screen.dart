@@ -1,10 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart' as ap;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/pharmacy.dart';
 import '../models/reminder.dart';
+import '../models/voice_note.dart';
 import '../data/pharmacy_repository.dart';
 import '../data/reminder_repository.dart';
+import '../data/voice_note_repository.dart';
 import '../services/formatters.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
@@ -25,10 +32,17 @@ class PharmacyDetailScreen extends StatefulWidget {
 class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
   final PharmacyRepository _pharmacyRepo = PharmacyRepository();
   final ReminderRepository _reminderRepo = ReminderRepository();
+  final VoiceNoteRepository _voiceNoteRepo = VoiceNoteRepository();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final ap.AudioPlayer _audioPlayer = ap.AudioPlayer();
 
   bool _isLoading = true;
   late Pharmacy _pharmacy;
   List<Reminder> _callHistory = [];
+  List<VoiceNote> _voiceNotes = [];
+  bool _isRecording = false;
+  DateTime? _recordingStartTime;
+  int? _playingNoteId;
 
   late TextEditingController _notesController;
   late FocusNode _notesFocusNode;
@@ -48,6 +62,8 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
     _notesFocusNode.removeListener(_onNotesFocusChange);
     _notesFocusNode.dispose();
     _notesController.dispose();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -81,6 +97,7 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
     final pharmacyId = widget.pharmacy.id!;
     final updatedPharmacy = await _pharmacyRepo.getById(pharmacyId);
     final history = await _reminderRepo.getByPharmacy(pharmacyId);
+    final voiceNotes = await _voiceNoteRepo.getByPharmacy(pharmacyId);
 
     if (mounted) {
       setState(() {
@@ -91,9 +108,112 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
           }
         }
         _callHistory = history;
+        _voiceNotes = voiceNotes;
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_isRecording) {
+      final path = await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+      });
+      if (path != null && _recordingStartTime != null) {
+        final durationSeconds = DateTime.now().difference(_recordingStartTime!).inSeconds;
+        final now = DateTime.now();
+        final createdAt = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
+            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+        await _voiceNoteRepo.insert(VoiceNote(
+          pharmacyId: _pharmacy.id!,
+          filePath: path,
+          durationSeconds: durationSeconds,
+          createdAt: createdAt,
+        ));
+        _loadData();
+      }
+      _recordingStartTime = null;
+    } else {
+      final micStatus = await Permission.microphone.request();
+      if (!micStatus.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission is required to record voice notes.')),
+          );
+        }
+        return;
+      }
+      final dir = await getApplicationDocumentsDirectory();
+      final voiceNotesDir = Directory('${dir.path}/voice_notes');
+      if (!await voiceNotesDir.exists()) {
+        await voiceNotesDir.create(recursive: true);
+      }
+      final fileName = 'pharmacy_${_pharmacy.id}_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final filePath = '${voiceNotesDir.path}/$fileName';
+      await _audioRecorder.start(const RecordConfig(), path: filePath);
+      setState(() {
+        _isRecording = true;
+        _recordingStartTime = DateTime.now();
+      });
+    }
+  }
+
+  Future<void> _togglePlayback(VoiceNote note) async {
+    if (_playingNoteId == note.id) {
+      await _audioPlayer.stop();
+      setState(() {
+        _playingNoteId = null;
+      });
+    } else {
+      await _audioPlayer.stop();
+      await _audioPlayer.play(ap.DeviceFileSource(note.filePath));
+      setState(() {
+        _playingNoteId = note.id;
+      });
+      _audioPlayer.onPlayerComplete.first.then((_) {
+        if (mounted) {
+          setState(() {
+            _playingNoteId = null;
+          });
+        }
+      });
+    }
+  }
+
+  Future<void> _confirmDeleteVoiceNote(VoiceNote note) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Voice Note'),
+        content: const Text('This voice note will be permanently deleted. This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      if (_playingNoteId == note.id) {
+        await _audioPlayer.stop();
+      }
+      await _voiceNoteRepo.delete(note);
+      _loadData();
+    }
+  }
+
+  String _formatDuration(int? seconds) {
+    if (seconds == null) return '';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '$m:${s.toString().padLeft(2, '0')}';
   }
 
   void _openLogCallDialog() {
@@ -491,6 +611,90 @@ class _PharmacyDetailScreenState extends State<PharmacyDetailScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 24),
+
+                      // Voice Notes Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Voice Notes',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF004D40),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _toggleRecording,
+                            icon: Icon(
+                              _isRecording ? Icons.stop_circle : Icons.mic,
+                              color: _isRecording ? Colors.red : const Color(0xFF00695C),
+                            ),
+                            tooltip: _isRecording ? 'Stop Recording' : 'Record Voice Note',
+                          ),
+                        ],
+                      ),
+                      if (_isRecording)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            'Recording...',
+                            style: theme.textTheme.bodySmall?.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      _voiceNotes.isEmpty
+                          ? Card(
+                              margin: EdgeInsets.zero,
+                              color: cardA,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.teal[200]!, width: 1),
+                              ),
+                              child: const Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: Center(child: Text('No voice notes recorded.')),
+                              ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: _voiceNotes.length,
+                              itemBuilder: (context, index) {
+                                final note = _voiceNotes[index];
+                                final isPlaying = _playingNoteId == note.id;
+                                final cardBg = index.isEven ? cardA : cardB;
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  color: cardBg,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                    side: BorderSide(color: Colors.teal[200]!, width: 1),
+                                  ),
+                                  child: ListTile(
+                                    leading: IconButton(
+                                      icon: Icon(
+                                        isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                        color: const Color(0xFF00695C),
+                                        size: 32,
+                                      ),
+                                      onPressed: () => _togglePlayback(note),
+                                    ),
+                                    title: Text(
+                                      note.createdAt,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF004D40)),
+                                    ),
+                                    subtitle: note.durationSeconds != null
+                                        ? Text(_formatDuration(note.durationSeconds))
+                                        : null,
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                      onPressed: () => _confirmDeleteVoiceNote(note),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                       const SizedBox(height: 24),
 
                       // Call Log History Section

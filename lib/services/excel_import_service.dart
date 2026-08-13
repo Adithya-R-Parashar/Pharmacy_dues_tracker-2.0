@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../data/database_helper.dart';
 import '../data/city_alias_repository.dart';
 import '../data/pharmacy_repository.dart';
+import 'category_calculator.dart';
 
 int _levenshteinDistance(String a, String b) {
   final la = a.length, lb = b.length;
@@ -173,8 +174,11 @@ class ExcelImportService {
         final salesman = row['salesman'] as String?;
         final city = row['city'] as String?;
         final category = row['category'] as String?;
-        final resolvedCity = city != null ? (aliasMap[city.trim().toLowerCase()] ?? city.trim()) : null;
         final totalAmount = row['totalAmount'] as double;
+        final resolvedCategory = (category != null && category.trim().isNotEmpty)
+            ? category.trim()
+            : CategoryCalculator.categoryForAmount(totalAmount);
+        final resolvedCity = city != null ? (aliasMap[city.trim().toLowerCase()] ?? city.trim()) : null;
         final bucket121180 = row['bucket121180'] as double?;
         final bucket181270 = row['bucket181270'] as double?;
         final bucket271360 = row['bucket271360'] as double?;
@@ -194,7 +198,7 @@ class ExcelImportService {
             'name': partyName,
             'salesman': salesman,
             'city': resolvedCity,
-            'category': category,
+            'category': resolvedCategory,
             'total_amount': totalAmount,
             'bucket_121_180': bucket121180,
             'bucket_181_270': bucket181270,
@@ -212,7 +216,7 @@ class ExcelImportService {
               'name': partyName,
               'salesman': salesman,
               'city': resolvedCity,
-              'category': category,
+              'category': resolvedCategory,
               'total_amount': totalAmount,
               'bucket_121_180': bucket121180,
               'bucket_181_270': bucket181270,
