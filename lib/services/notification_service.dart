@@ -8,8 +8,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import '../data/pharmacy_repository.dart';
 import '../data/reminder_repository.dart';
 import 'formatters.dart';
-import '../screens/pharmacy_detail_screen.dart';
-import '../screens/salesman_detail_screen.dart';
+import '../screens/full_screen_reminder_screen.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -115,6 +114,8 @@ class NotificationService {
           channelDescription: 'Reminders to call pharmacies and salesmen',
           importance: Importance.max,
           priority: Priority.high,
+          category: AndroidNotificationCategory.call,
+          fullScreenIntent: true,
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -254,11 +255,11 @@ class NotificationService {
   }
 
   static Future<void> _navigateToPharmacyDetail(int pharmacyId) async {
-    final pharmacy = await PharmacyRepository().getById(pharmacyId);
-    if (pharmacy != null && navigatorKey.currentState != null) {
+    if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.push(
         MaterialPageRoute(
-          builder: (_) => PharmacyDetailScreen(pharmacy: pharmacy),
+          builder: (_) => FullScreenReminderScreen(reminderType: 'pharmacy', pharmacyId: pharmacyId),
+          fullscreenDialog: true,
         ),
       );
     }
@@ -268,7 +269,8 @@ class NotificationService {
     if (navigatorKey.currentState != null) {
       navigatorKey.currentState!.push(
         MaterialPageRoute(
-          builder: (_) => SalesmanDetailScreen(salesmanName: salesmanName),
+          builder: (_) => FullScreenReminderScreen(reminderType: 'salesman', salesmanName: salesmanName),
+          fullscreenDialog: true,
         ),
       );
     }

@@ -29,10 +29,7 @@ import java.util.Locale
  *   - Column: `id` (INTEGER)
  *   - Column: `name` (TEXT)
  *   - Column: `salesman` (TEXT)
- * - Table: `invoices`
- *   - Column: `pharmacy_id` (INTEGER)
- *   - Column: `due_amount` (REAL)
- *   - Column: `status` (TEXT, e.g. "open")
+ *   - Column: `total_amount` (REAL)
  *
  * Any changes to these tables/columns in future schema migrations MUST be kept in sync here.
  */
@@ -91,17 +88,15 @@ class BootReceiver : BroadcastReceiver() {
                         }
                         pharmacyCursor.close()
 
-                        val invoiceCursor = db.rawQuery("SELECT due_amount FROM invoices WHERE pharmacy_id = ? AND status = 'open'", arrayOf(pharmacyId.toString()))
+                        val amountCursor = db.rawQuery("SELECT total_amount FROM pharmacies WHERE id = ?", arrayOf(pharmacyId.toString()))
                         var totalDue = 0.0
-                        var openInvoicesCount = 0
-                        while (invoiceCursor.moveToNext()) {
-                            totalDue += invoiceCursor.getDouble(0)
-                            openInvoicesCount++
+                        if (amountCursor.moveToFirst() && !amountCursor.isNull(0)) {
+                            totalDue = amountCursor.getDouble(0)
                         }
-                        invoiceCursor.close()
+                        amountCursor.close()
 
                         title = "Call $pharmacyName"
-                        body = "₹${formatCurrency(totalDue)} outstanding — $openInvoicesCount open invoices"
+                        body = "₹${formatCurrency(totalDue)} outstanding"
                         payload = "{\"reminder_type\":\"pharmacy\",\"pharmacy_id\":$pharmacyId,\"salesman_name\":null}"
                     } else if (reminderType == "salesman" && !salesmanName.isNullOrEmpty()) {
                         val pharmacyCursor = db.rawQuery("SELECT id FROM pharmacies WHERE salesman = ?", arrayOf(salesmanName))
@@ -113,11 +108,11 @@ class BootReceiver : BroadcastReceiver() {
 
                         var totalDue = 0.0
                         for (pId in pIds) {
-                            val invoiceCursor = db.rawQuery("SELECT due_amount FROM invoices WHERE pharmacy_id = ? AND status = 'open'", arrayOf(pId.toString()))
-                            while (invoiceCursor.moveToNext()) {
-                                totalDue += invoiceCursor.getDouble(0)
+                            val amountCursor = db.rawQuery("SELECT total_amount FROM pharmacies WHERE id = ?", arrayOf(pId.toString()))
+                            if (amountCursor.moveToFirst() && !amountCursor.isNull(0)) {
+                                totalDue += amountCursor.getDouble(0)
                             }
-                            invoiceCursor.close()
+                            amountCursor.close()
                         }
 
                         title = "Call Salesman $salesmanName"

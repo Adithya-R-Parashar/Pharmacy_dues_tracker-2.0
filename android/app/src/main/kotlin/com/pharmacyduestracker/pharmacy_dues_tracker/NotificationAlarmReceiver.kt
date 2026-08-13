@@ -54,7 +54,9 @@ class NotificationAlarmReceiver : BroadcastReceiver() {
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
             .setContentIntent(pendingIntent)
+            .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)
 
         notificationManager.notify(notificationId, notificationBuilder.build())
